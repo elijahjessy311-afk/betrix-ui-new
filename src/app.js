@@ -1,8 +1,5 @@
 /**
- * ============================================================================
  * BETRIX EXPRESS SERVER - COMPLETE PRODUCTION-READY REWRITE
- * ============================================================================
- *
  * - Full feature set: branding, menus, 150+ endpoints scaffolding
  * - Robust middleware: Helmet, CORS, Compression, Morgan, Body parsing
  * - IPv6-safe rate limiting using express-rate-limit ipKeyGenerator
@@ -15,9 +12,8 @@
  * - PayPal success/cancel pages and webhook queueing scaffolding
  * - Multer file upload handling with validation
  * - Graceful shutdown and initialization seeding
- * - Clear, consistent JSON responses and branded HTML pages
  *
- * Drop this into src/app.js and restart your service.
+ * NOTE: If running Node < 18, install and import node-fetch.
  */
 
 import express from "express";
@@ -111,7 +107,7 @@ const server = createServer(app);
 const redis = new Redis(REDIS_URL);
 const wss = new WebSocketServer({ server });
 
-// Ensure proxies (Render, Cloudflare) are trusted so req.ip is correct
+// Trust reverse proxy (Render, Cloudflare) so req.ip uses X-Forwarded-For
 app.set("trust proxy", 1);
 
 // ============================================================================
