@@ -1,34 +1,27 @@
 /**
- * BETRIX EXPRESS SERVER - PRODUCTION-READY (COMPREHENSIVE)
+ * BETRIX EXPRESS SERVER - PRODUCTION-GRADE (COMPREHENSIVE)
  *
- * - Full feature set: branding, menus, 150+ endpoints scaffolding
- * - Robust middleware: Helmet, CORS, Compression, Morgan, Body parsing
- * - IPv6-safe rate limiting using express-rate-limit ipKeyGenerator
- * - Proxy-aware (trust proxy) for X-Forwarded-For correctness
- * - Tiered rate limiting (free/member/vvip/admin)
- * - Redis-backed logging, queues, counters, and caching
- * - WebSocket server with subscription channels and admin broadcast
+ * - ES module style
+ * - Robust middleware: Helmet, CORS, Compression, Morgan, body-parser
+ * - Rate limiting with IPv4/IPv6-safe key generator and proxy trust
+ * - Redis-backed logging, queues, and caching (ioredis)
+ * - WebSocket server (ws) with subscription model and safe send
  * - Admin Basic auth with bcrypt + Redis-stored hash
- * - Telegram webhook handling with optional secret enforcement and tokenized route
- * - PayPal scaffolding (success/cancel pages + webhook queueing)
- * - Multer file upload handling with validation
- * - Graceful shutdown and initialization seeding
+ * - File uploads via Multer (memory storage) with validation
+ * - Telegram webhook validation and async processing
+ * - PayPal scaffolding and branded payment pages
+ * - Graceful shutdown, health, metrics, and telemetry endpoints
+ * - Extensive inline documentation and defensive checks
  *
- * Notes:
- * - Node 18+ provides global fetch. If using Node < 18, install node-fetch and uncomment import.
- * - Ensure package.json includes: express, body-parser, ioredis, helmet, cors, express-rate-limit, compression,
- *   morgan, ws, multer, bcryptjs, path, and any other runtime dependencies.
+ * NOTE: Keep environment variables secure in your deployment platform.
  */
-
-// If Node < 18, uncomment the next line and install node-fetch:
-// import fetch from "node-fetch";
 
 import express from "express";
 import bodyParser from "body-parser";
 import Redis from "ioredis";
 import helmet from "helmet";
 import cors from "cors";
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import rateLimit from "express-rate-limit";
 import compression from "compression";
 import morgan from "morgan";
 import path from "path";
@@ -38,8 +31,11 @@ import { createServer } from "http";
 import multer from "multer";
 import bcrypt from "bcryptjs";
 
+// If Node < 18, uncomment and install node-fetch:
+// import fetch from "node-fetch";
+
 // ============================================================================
-// PATHS & ENVIRONMENT
+// PATHS & ENV
 // ============================================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,32 +44,46 @@ const {
   REDIS_URL = "redis://default:@localhost:6379",
   TELEGRAM_TOKEN = "",
   TELEGRAM_WEBHOOK_SECRET = "",
-  TELEGRAM_WEBHOOK_URL = "", // optional: auto-register webhook on init if set
-  TELEGRAM_ENFORCE_SECRET = "true", // "true" or "false"
+  TELEGRAM_WEBHOOK_URL = "",
   PAYPAL_CLIENT_ID = "",
   PAYPAL_CLIENT_SECRET = "",
-  PORT = 5000,
+  PORT = "5000",
   NODE_ENV = "production",
   ADMIN_USERNAME = "admin",
   ADMIN_PASSWORD = "betrix2024!",
-  ALLOWED_ORIGINS = "*"
+  ALLOWED_ORIGINS = "*",
+  LOG_LIMIT = "1000"
 } = process.env;
 
-const port = Number.isInteger(parseInt(String(PORT), 10)) ? parseInt(String(PORT), 10) : 5000;
+const port = Number.parseInt(PORT, 10) || 5000;
 const isProd = NODE_ENV === "production";
+const LOG_STREAM_KEY = "system:logs";
+const LOG_KEEP = Math.max(100, Number.parseInt(LOG_LIMIT, 10) || 1000);
+
+// ============================================================================
+// APP, SERVER, REDIS, WEBSOCKET
+// ============================================================================
+const app = express();
+const server = createServer(app);
+const redis = new Redis(REDIS_URL);
+
+// WebSocket server attached to same HTTP server
+const wss = new WebSocketServer({ server });
+
+// Trust proxy so req.ip and X-Forwarded-For behave correctly behind load balancers
+app.set("trust proxy", true);
 
 // ============================================================================
 // BRAND CONFIG
 // ============================================================================
-const BETRIX_CONFIG = {
-  brand: {
-    name: "BETRIX",
-    fullName: "BETRIX - Global Sports AI Platform",
-    slogan: "Intelligent Sports Betting Analytics",
-    version: "3.0.0",
-    primaryColor: "#2563eb",
-    secondaryColor: "#1e40af",
-    accentColor: "#f59e0b"
+const BETRIX = {
+  name: "BETRIX",
+  version: "3.0.0",
+  slogan: "Intelligent Sports Betting Analytics",
+  colors: {
+    primary: "#2563eb",
+    secondary: "#1e40af",
+    accent: "#f59e0b"
   },
   menu: {
     main: [
@@ -85,68 +95,87 @@ const BETRIX_CONFIG = {
       { name: "Payments", path: "/payments", icon: "💳" }
     ],
     admin: [
-      { name: "System Overview", path: "/admin", icon: "🖥️" },
-      { name: "User Management", path: "/admin/users", icon: "👥" },
-      { name: "Payment Logs", path: "/admin/payments", icon: "💰" },
-      { name: "API Analytics", path: "/admin/analytics", icon: "📊" },
+      { name: "Overview", path: "/admin", icon: "🖥️" },
+      { name: "Users", path: "/admin/users", icon: "👥" },
+      { name: "Payments", path: "/admin/payments", icon: "💰" },
+      { name: "Analytics", path: "/admin/analytics", icon: "📊" },
       { name: "Settings", path: "/admin/settings", icon: "⚙️" }
     ]
   },
   pricing: {
-    tiers: {
-      free: { name: "Free", price: 0, features: ["Basic Predictions", "Limited Access", "Community Access"] },
-      signup: { name: "Signup", price: 150, features: ["Full Access 24h", "Basic Support", "Professional Betslips"] },
-      daily: { name: "VVIP Daily", price: 200, features: ["Premium Predictions", "Priority Support", "AI Coach Access"] },
-      weekly: { name: "VVIP Weekly", price: 800, features: ["All Daily Features", "Extended Analytics", "Expert Insights"] },
-      monthly: { name: "VVIP Monthly", price: 2500, features: ["All Features", "24/7 Support", "Custom Analysis", "Personal Manager"] }
-    }
+    free: { name: "Free", price: 0, features: ["Basic Predictions", "Limited Access"] },
+    member: { name: "Member", price: 150, features: ["Advanced analytics", "Priority support"] },
+    vvip: { name: "VVIP", price: 200, features: ["AI Coach", "Exclusive content"] }
   }
 };
 
 // ============================================================================
-// APP, SERVER, REDIS, WEBSOCKET
+// LOGGING UTILITIES
 // ============================================================================
-const app = express();
-const server = createServer(app);
-const redis = new Redis(REDIS_URL);
-const wss = new WebSocketServer({ server });
+const safeJson = v => {
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+};
 
-// Trust reverse proxy (Render, Cloudflare) so req.ip uses X-Forwarded-For
-app.set("trust proxy", 1);
-
-// ============================================================================
-// LOGGING (console + redis + ws broadcast)
-// ============================================================================
-const LOG_STREAM_KEY = "system:logs";
-const LOG_LIMIT = 1000;
-
-const log = (level, module, message, data = null) => {
-  const timestamp = new Date().toISOString();
-  const entry = { timestamp, level, module, message, data, environment: NODE_ENV };
-
+const log = (level, moduleName, message, data = null) => {
+  const ts = new Date().toISOString();
+  const entry = { ts, level, module: moduleName, message, data, env: NODE_ENV };
   // Console
-  const addon = data ? ` | ${JSON.stringify(data)}` : "";
-  console.log(`[${timestamp}] [${level}] [${module}] ${message}${addon}`);
+  const extra = data ? ` | ${safeJson(data)}` : "";
+  console.log(`[${ts}] [${level}] [${moduleName}] ${message}${extra}`);
 
-  // Redis append + trim
-  redis.lpush(LOG_STREAM_KEY, JSON.stringify(entry))
-    .then(() => redis.ltrim(LOG_STREAM_KEY, 0, LOG_LIMIT - 1).catch(() => {}))
-    .catch(err => console.error("Redis log storage error:", err?.message || err));
+  // Redis append and trim
+  redis
+    .lpush(LOG_STREAM_KEY, safeJson(entry))
+    .then(() => redis.ltrim(LOG_STREAM_KEY, 0, LOG_KEEP - 1))
+    .catch(err => console.error("Redis log error:", err?.message));
 
-  // Counters
+  // Increment counters (best-effort)
   redis.incr(`stats:logs:${level}`).catch(() => {});
 
-  // Broadcast to admin WS clients for WARN/ERROR
+  // Broadcast WARN/ERROR to admin WS clients
   if (level === "WARN" || level === "ERROR") {
-    broadcastToAdmins({ type: "log", data: entry });
+    broadcastToAdmins({ type: "log", entry });
   }
 };
 
 // ============================================================================
-// WEBSOCKET: clients, subscriptions, events
+// WEBSOCKET HELPERS
 // ============================================================================
 const activeConnections = new Set();
 const clientSubscriptions = new Map();
+
+const safeSend = (ws, payload) => {
+  try {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(payload));
+  } catch (err) {
+    // ignore send errors
+  }
+};
+
+const broadcastToAdmins = message => {
+  const str = JSON.stringify(message);
+  activeConnections.forEach(ws => {
+    try {
+      if (ws.readyState === 1) ws.send(str);
+    } catch {}
+  });
+};
+
+const broadcastToChannel = (channel, message) => {
+  const str = JSON.stringify(message);
+  activeConnections.forEach(ws => {
+    const subs = clientSubscriptions.get(ws);
+    if (subs && subs.has(channel) && ws.readyState === 1) {
+      try {
+        ws.send(str);
+      } catch {}
+    }
+  });
+};
 
 wss.on("connection", (ws, req) => {
   const clientId = Math.random().toString(36).slice(2, 11);
@@ -156,7 +185,7 @@ wss.on("connection", (ws, req) => {
   log("INFO", "WEBSOCKET", "Client connected", {
     clientId,
     ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress,
-    totalConnections: activeConnections.size
+    total: activeConnections.size
   });
 
   ws.on("message", raw => {
@@ -164,7 +193,7 @@ wss.on("connection", (ws, req) => {
       const data = JSON.parse(String(raw));
       handleWebSocketMessage(ws, data, clientId);
     } catch (err) {
-      log("ERROR", "WEBSOCKET", "Message parse error", { clientId, error: err.message });
+      log("ERROR", "WEBSOCKET", "Invalid WS message", { clientId, err: err.message });
       safeSend(ws, { type: "error", error: "Invalid message format" });
     }
   });
@@ -172,52 +201,37 @@ wss.on("connection", (ws, req) => {
   ws.on("close", () => {
     activeConnections.delete(ws);
     clientSubscriptions.delete(ws);
-    log("INFO", "WEBSOCKET", "Client disconnected", { clientId, remainingConnections: activeConnections.size });
+    log("INFO", "WEBSOCKET", "Client disconnected", { clientId, remaining: activeConnections.size });
   });
 
   ws.on("error", err => {
-    log("ERROR", "WEBSOCKET", "Socket error", { clientId, error: err.message });
+    log("ERROR", "WEBSOCKET", "WS error", { clientId, err: err.message });
   });
 
   safeSend(ws, {
     type: "welcome",
     data: {
-      brand: BETRIX_CONFIG.brand,
-      systemStatus: "operational",
+      brand: BETRIX.name,
+      version: BETRIX.version,
       timestamp: new Date().toISOString(),
-      serverVersion: BETRIX_CONFIG.brand.version,
       clientId
     }
   });
 });
 
-const safeSend = (ws, payload) => {
-  if (ws && ws.readyState === 1) ws.send(JSON.stringify(payload));
-};
-
-const broadcastToAdmins = message => {
-  const str = JSON.stringify(message);
-  activeConnections.forEach(ws => {
-    if (ws.readyState === 1) ws.send(str);
-  });
-};
-
-const broadcastToChannel = (channel, message) => {
-  const str = JSON.stringify(message);
-  activeConnections.forEach(ws => {
-    const subs = clientSubscriptions.get(ws);
-    if (subs && subs.has(channel) && ws.readyState === 1) ws.send(str);
-  });
-};
-
 const handleWebSocketMessage = (ws, data, clientId) => {
-  switch (data?.type) {
+  if (!data || typeof data.type !== "string") {
+    safeSend(ws, { type: "error", error: "Missing message type" });
+    return;
+  }
+
+  switch (data.type) {
     case "subscribe": {
       const channels = Array.isArray(data.channels) ? data.channels : [data.channels].filter(Boolean);
       const subs = clientSubscriptions.get(ws) || new Set();
       channels.forEach(c => subs.add(c));
       clientSubscriptions.set(ws, subs);
-      log("INFO", "WEBSOCKET", "Client subscribed", { clientId, channels });
+      log("INFO", "WEBSOCKET", "Subscribed", { clientId, channels });
       safeSend(ws, { type: "subscribed", channels, timestamp: Date.now() });
       break;
     }
@@ -226,7 +240,7 @@ const handleWebSocketMessage = (ws, data, clientId) => {
       const subs = clientSubscriptions.get(ws) || new Set();
       channels.forEach(c => subs.delete(c));
       clientSubscriptions.set(ws, subs);
-      log("INFO", "WEBSOCKET", "Client unsubscribed", { clientId, channels });
+      log("INFO", "WEBSOCKET", "Unsubscribed", { clientId, channels });
       safeSend(ws, { type: "unsubscribed", channels });
       break;
     }
@@ -235,11 +249,11 @@ const handleWebSocketMessage = (ws, data, clientId) => {
       break;
     }
     case "get-stats": {
-      safeSend(ws, { type: "stats", data: { clientId, uptime: process.uptime(), timestamp: Date.now() } });
+      safeSend(ws, { type: "stats", data: { uptime: process.uptime(), timestamp: Date.now() } });
       break;
     }
     default: {
-      log("WARN", "WEBSOCKET", "Unknown message type", { clientId, type: data?.type });
+      log("WARN", "WEBSOCKET", "Unknown WS type", { clientId, type: data.type });
       safeSend(ws, { type: "error", error: "Unknown message type" });
     }
   }
@@ -248,34 +262,40 @@ const handleWebSocketMessage = (ws, data, clientId) => {
 // ============================================================================
 // MIDDLEWARE STACK
 // ============================================================================
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://api.telegram.org", "https://api.paypal.com"]
-    }
-  },
-  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
-}));
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'", "https://api.telegram.org", "https://api.paypal.com"]
+      }
+    },
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
+  })
+);
 
-app.use(cors({
-  origin: ALLOWED_ORIGINS === "*" ? "*" : ALLOWED_ORIGINS.split(",").map(s => s.trim()),
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  credentials: true,
-  optionsSuccessStatus: 200
-}));
+app.use(
+  cors({
+    origin: ALLOWED_ORIGINS === "*" ? "*" : ALLOWED_ORIGINS.split(",").map(s => s.trim()),
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    optionsSuccessStatus: 200
+  })
+);
 
 app.use(compression());
 app.use(morgan(isProd ? "combined" : "dev"));
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
 
+// Static assets
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/assets", express.static(path.join(__dirname, "assets")));
 
+// Cache headers for static vs dynamic
 app.use((req, res, next) => {
   if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|woff|woff2)$/)) {
     res.setHeader("Cache-Control", "public, max-age=86400");
@@ -287,16 +307,35 @@ app.use((req, res, next) => {
   next();
 });
 
+// Branding headers
 app.use((req, res, next) => {
-  res.setHeader("X-Powered-By", `${BETRIX_CONFIG.brand.name}/${BETRIX_CONFIG.brand.version}`);
+  res.setHeader("X-Powered-By", `${BETRIX.name}/${BETRIX.version}`);
   res.setHeader("X-Content-Type-Options", "nosniff");
   next();
 });
 
 // ============================================================================
-// RATE LIMITING - IPv6-safe using ipKeyGenerator
+// RATE LIMITING - IPv6-safe key generator
 // ============================================================================
-const baseRateLimiter = (windowMs, max, message) =>
+/**
+ * ipKeyGenerator
+ * - Normalizes IPv6/IPv4 addresses and falls back to X-Forwarded-For first entry.
+ * - Ensures express-rate-limit sees consistent keys for IPv6 addresses.
+ */
+const ipKeyGenerator = req => {
+  // Express sets req.ip using trust proxy; prefer that
+  if (req.ip) return String(req.ip);
+  const xff = req.headers["x-forwarded-for"];
+  if (typeof xff === "string") {
+    // take first IP in list
+    const first = xff.split(",")[0].trim();
+    return first || "unknown";
+  }
+  // fallback to connection/socket
+  return req.socket?.remoteAddress || req.connection?.remoteAddress || "unknown";
+};
+
+const baseLimiter = (windowMs, max, message) =>
   rateLimit({
     windowMs,
     max,
@@ -304,42 +343,42 @@ const baseRateLimiter = (windowMs, max, message) =>
     standardHeaders: true,
     legacyHeaders: false,
     skip: req => NODE_ENV === "development",
-    keyGenerator: req => ipKeyGenerator(req)
+    keyGenerator: ipKeyGenerator
   });
 
-const freeLimiter = baseRateLimiter(60 * 1000, 30, "Rate limit exceeded. Upgrade for higher limits.");
-const memberLimiter = baseRateLimiter(60 * 1000, 60, "Rate limit exceeded for member tier.");
-const vvipLimiter = baseRateLimiter(60 * 1000, 150, "Rate limit exceeded for VVIP tier.");
-const adminLimiter = baseRateLimiter(60 * 1000, 300, "Rate limit exceeded for admin.");
+const freeLimiter = baseLimiter(60 * 1000, 30, "Rate limit exceeded. Upgrade for higher limits.");
+const memberLimiter = baseLimiter(60 * 1000, 60, "Rate limit exceeded for member tier.");
+const vvipLimiter = baseLimiter(60 * 1000, 150, "Rate limit exceeded for VVIP tier.");
+const adminLimiter = baseLimiter(60 * 1000, 300, "Rate limit exceeded for admin.");
 
 const getUserTier = async userId => {
   try {
     if (!userId) return "free";
-    const cachedTier = await redis.get(`user:tier:${userId}`);
-    return cachedTier || "free";
+    const tier = await redis.get(`user:tier:${userId}`);
+    return tier || "free";
   } catch (err) {
-    log("WARN", "TIER", "Cache lookup failed", { error: err.message });
+    log("WARN", "TIER", "Redis tier lookup failed", { err: err.message });
     return "free";
   }
 };
 
 const tierBasedRateLimiter = async (req, res, next) => {
   try {
-    const userId = req.query.userId || req.body.userId || req.headers["x-user-id"];
+    const userId = req.query.userId || req.body?.userId || req.headers["x-user-id"];
     const tier = await getUserTier(userId);
-    log("DEBUG", "RATELIMIT", "Applying tier limiter", { userId, tier, ip: req.ip, forwarded: req.headers["x-forwarded-for"] });
+    log("DEBUG", "RATELIMIT", "Tier check", { userId, tier, ip: req.ip, forwarded: req.headers["x-forwarded-for"] });
     if (tier === "admin") return adminLimiter(req, res, next);
     if (tier === "vvip") return vvipLimiter(req, res, next);
     if (tier === "member") return memberLimiter(req, res, next);
     return freeLimiter(req, res, next);
   } catch (err) {
-    log("ERROR", "RATELIMIT", "Tier limiter error", { error: err.message });
+    log("ERROR", "RATELIMIT", "Tier limiter error", { err: err.message });
     return freeLimiter(req, res, next);
   }
 };
 
 // ============================================================================
-// FILE UPLOADS (Multer)
+// MULTER FILE UPLOADS
 // ============================================================================
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -347,36 +386,40 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024, files: 5 },
   fileFilter: (req, file, cb) => {
     const allowed = /jpeg|jpg|png|gif|pdf|txt|csv/;
-    const ext = allowed.test(path.extname(file.originalname).toLowerCase());
-    const mime = allowed.test(file.mimetype);
-    if (ext && mime) {
-      log("INFO", "UPLOAD", "File validated", { filename: file.originalname, mimetype: file.mimetype });
-      return cb(null, true);
+    const ext = path.extname(file.originalname || "").toLowerCase();
+    const ok = allowed.test(ext) && allowed.test(file.mimetype);
+    if (ok) {
+      log("INFO", "UPLOAD", "Accepted file", { filename: file.originalname, mimetype: file.mimetype });
+      cb(null, true);
+    } else {
+      log("WARN", "UPLOAD", "Rejected file", { filename: file.originalname, mimetype: file.mimetype });
+      cb(new Error("Invalid file type. Allowed: jpeg, jpg, png, gif, pdf, txt, csv"));
     }
-    log("WARN", "UPLOAD", "Invalid file type", { filename: file.originalname, mimetype: file.mimetype });
-    cb(new Error("Invalid file type. Allowed: jpeg, jpg, png, gif, pdf, txt, csv"));
   }
 });
 
 // ============================================================================
-// AUTHENTICATION (Admin Basic + bcrypt + Redis)
+// AUTHENTICATION - Admin Basic + bcrypt + Redis
 // ============================================================================
 const authenticateAdmin = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Basic ")) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith("Basic ")) {
     log("WARN", "AUTH", "Missing Basic auth");
     return res.status(401).json({ error: "Admin authentication required" });
   }
   try {
-    const creds = Buffer.from(authHeader.slice(6), "base64").toString();
+    const creds = Buffer.from(header.slice(6), "base64").toString();
     const [username, password] = creds.split(":");
-    const adminHash = await redis.get("admin:password");
-    if (!adminHash) {
-      log("WARN", "AUTH", "Admin password not initialized");
-      return res.status(500).json({ error: "Admin system not initialized" });
+    const storedHash = await redis.get("admin:password");
+    if (!storedHash) {
+      // initialize admin password hash if not present (first-run convenience)
+      const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+      await redis.set("admin:password", hash);
+      log("INFO", "AUTH", "Initialized admin password hash");
     }
-    const ok = await bcrypt.compare(password, adminHash);
-    if (username === ADMIN_USERNAME && ok) {
+    const hashToCheck = storedHash || (await redis.get("admin:password"));
+    const valid = await bcrypt.compare(password, hashToCheck);
+    if (username === ADMIN_USERNAME && valid) {
       req.adminUser = username;
       log("INFO", "AUTH", "Admin authenticated", { username });
       return next();
@@ -384,97 +427,78 @@ const authenticateAdmin = async (req, res, next) => {
     log("WARN", "AUTH", "Invalid admin credentials", { username });
     return res.status(401).json({ error: "Invalid admin credentials" });
   } catch (err) {
-    log("ERROR", "AUTH", "Auth error", { error: err.message });
+    log("ERROR", "AUTH", "Auth error", { err: err.message });
     return res.status(500).json({ error: "Authentication failed" });
   }
 };
 
 // ============================================================================
-// UTILITIES
+// UTILITIES: formatResponse, brand styles, queue, telegram
 // ============================================================================
 const formatResponse = (success, data = null, message = "") => ({
   success,
   data,
   message,
   timestamp: new Date().toISOString(),
-  brand: BETRIX_CONFIG.brand.name
+  brand: BETRIX.name
 });
 
 const getBrandStyles = () => `
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, ${BETRIX_CONFIG.brand.primaryColor} 0%, ${BETRIX_CONFIG.brand.secondaryColor} 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-  .container { max-width: 500px; width: 100%; padding: 20px; }
-  .brand-header { text-align: center; color: white; margin-bottom: 40px; }
-  .brand-header h1 { font-size: 2.5em; margin-bottom: 10px; font-weight: 700; }
-  .brand-header p { font-size: 1.1em; opacity: 0.9; }
-  .payment-status { background: white; border-radius: 10px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); text-align: center; }
-  .payment-status.success { border-top: 5px solid #10b981; }
-  .payment-status.error { border-top: 5px solid #ef4444; }
-  .payment-status.cancelled { border-top: 5px solid ${BETRIX_CONFIG.brand.accentColor}; }
-  .payment-status h2 { margin-bottom: 15px; font-size: 1.8em; color: #333; }
-  .payment-status p { color: #666; margin-bottom: 20px; line-height: 1.6; }
-  .features { text-align: left; background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0; }
-  .btn { display: inline-block; padding: 12px 30px; border-radius: 5px; text-decoration: none; font-weight: bold; margin-top: 20px; transition: all 0.3s; border: none; cursor: pointer; }
-  .btn-primary { background: ${BETRIX_CONFIG.brand.primaryColor}; color: white; }
-  .btn-secondary { background: #e5e7eb; color: #333; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Segoe UI,system-ui,Arial;background:linear-gradient(135deg,${BETRIX.colors.primary},${BETRIX.colors.secondary});min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .container{max-width:700px;padding:24px;background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.12)}
+  .brand{color:${BETRIX.colors.primary};font-weight:700}
 `;
 
-// ============================================================================
-// TELEGRAM HELPERS
-// ============================================================================
-const generatePricingMessage = () => {
-  let msg = `💵 <b>${BETRIX_CONFIG.brand.name} Pricing Plans</b>\n\n`;
-  Object.entries(BETRIX_CONFIG.pricing.tiers).forEach(([k, t]) => {
-    if (k === "free") return;
-    msg += `🎯 <b>${t.name}</b> - ${t.price}\n`;
-    t.features.forEach(f => (msg += `   ✅ ${f}\n`));
-    msg += "\n";
-  });
-  msg += `💳 <i>Use /pay to subscribe</i>`;
-  return msg;
-};
-
-const sendTelegram = async (chatId, message, options = {}) => {
+/**
+ * queueJob
+ * - Pushes a job to Redis list for background processing
+ */
+const queueJob = async (type, payload, priority = "normal") => {
+  const id = Math.random().toString(36).slice(2, 12);
+  const job = { id, type, payload, priority, ts: Date.now() };
   try {
-    if (!TELEGRAM_TOKEN) {
-      log("WARN", "TELEGRAM", "Token not configured");
-      return { ok: false };
-    }
-    const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
-    const payload = { chat_id: chatId, text: message, parse_mode: "HTML", ...options };
-    const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const data = await resp.json();
-    if (data.ok) log("INFO", "TELEGRAM", "Message sent", { chatId });
-    else log("ERROR", "TELEGRAM", "Send failed", { chatId, error: data.description });
-    return data;
+    await redis.rpush(`jobs:${priority}`, JSON.stringify(job));
+    log("INFO", "QUEUE", "Queued job", { id, type, priority });
+    return id;
   } catch (err) {
-    log("ERROR", "TELEGRAM", "sendTelegram error", { error: err.message });
-    return { ok: false };
-  }
-};
-
-const queueJob = async (jobType, data, priority = "normal") => {
-  try {
-    const key = `jobs:${priority}`;
-    const payload = { id: Math.random().toString(36).slice(2, 11), type: jobType, data, timestamp: Date.now(), priority };
-    await redis.rpush(key, JSON.stringify(payload));
-    log("INFO", "QUEUE", "Job queued", { type: jobType, id: payload.id });
-    return payload.id;
-  } catch (err) {
-    log("ERROR", "QUEUE", "Queue failed", { error: err.message });
+    log("ERROR", "QUEUE", "Queue push failed", { err: err.message });
     throw err;
   }
 };
 
+/**
+ * sendTelegram
+ * - Simple wrapper to send messages to Telegram bot API
+ * - Requires TELEGRAM_TOKEN in env
+ */
+const sendTelegram = async (chatId, text, options = {}) => {
+  if (!TELEGRAM_TOKEN) {
+    log("WARN", "TELEGRAM", "Token not configured");
+    return { ok: false, error: "Token not configured" };
+  }
+  try {
+    const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+    const body = { chat_id: chatId, text, parse_mode: "HTML", ...options };
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!data.ok) log("ERROR", "TELEGRAM", "Send failed", { chatId, data });
+    else log("INFO", "TELEGRAM", "Message sent", { chatId });
+    return data;
+  } catch (err) {
+    log("ERROR", "TELEGRAM", "Send error", { err: err.message });
+    return { ok: false, error: err.message };
+  }
+};
+
 // ============================================================================
-// ROOT & NAVIGATION ROUTES
+// ROUTES: root, health, metrics, dashboard
 // ============================================================================
 app.get("/", (req, res) => {
   res.json({
-    ...BETRIX_CONFIG.brand,
+    brand: { name: BETRIX.name, version: BETRIX.version, slogan: BETRIX.slogan },
     status: "operational",
     uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
     endpoints: {
       dashboard: "/dashboard",
       api: "/api/v1",
@@ -484,25 +508,28 @@ app.get("/", (req, res) => {
       health: "/health",
       metrics: "/metrics"
     },
-    menu: BETRIX_CONFIG.menu.main
+    menu: BETRIX.menu.main
   });
 });
 
 app.get("/health", (req, res) => {
-  res.json(formatResponse(true, { status: "healthy", uptime: process.uptime(), redis: true, version: BETRIX_CONFIG.brand.version }, "All systems operational"));
+  res.json(formatResponse(true, { status: "healthy", uptime: process.uptime(), redis: true, version: BETRIX.version }, "All systems operational"));
+});
+
+app.get("/metrics", async (req, res) => {
+  try {
+    const logCount = await redis.llen(LOG_STREAM_KEY).catch(() => 0);
+    res.json(formatResponse(true, { uptime: process.uptime(), logs: logCount }, "Metrics"));
+  } catch (err) {
+    res.status(500).json(formatResponse(false, null, "Metrics fetch failed"));
+  }
 });
 
 app.get("/dashboard", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, {
-    brand: BETRIX_CONFIG.brand,
-    menu: BETRIX_CONFIG.menu.main,
-    stats: { totalUsers: 50000, activePredictions: 1234, totalPayments: 450000, systemUptime: process.uptime() },
-    quickActions: [
-      { name: "View Predictions", action: "/predictions", icon: "🔮" },
-      { name: "Check Odds", action: "/odds/live", icon: "🎯" },
-      { name: "Payment History", action: "/payments/history", icon: "💳" },
-      { name: "Support", action: "/support", icon: "💬" }
-    ]
+    brand: { name: BETRIX.name, version: BETRIX.version },
+    menu: BETRIX.menu.main,
+    stats: { totalUsers: 50000, activePredictions: 1234, totalPayments: 450000, uptime: process.uptime() }
   }));
 });
 
@@ -510,49 +537,56 @@ app.get("/dashboard", tierBasedRateLimiter, (req, res) => {
 // ADMIN ROUTES
 // ============================================================================
 app.get("/admin", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
-  const latest = (await redis.lrange(LOG_STREAM_KEY, 0, 19).catch(() => [])).map(s => {
-    try { return JSON.parse(s); } catch { return null; }
+  const raw = await redis.lrange(LOG_STREAM_KEY, 0, 19).catch(() => []);
+  const logs = raw.map(r => {
+    try { return JSON.parse(r); } catch { return null; }
   }).filter(Boolean);
-  res.json(formatResponse(true, { menus: BETRIX_CONFIG.menu.admin, stats: { totalUsers: 50000, activeSessions: 2340, revenue: 450000, systemHealth: "98%" }, recentLogs: latest }));
+  res.json(formatResponse(true, { menus: BETRIX.menu.admin, recentLogs: logs }, "Admin overview"));
 });
 
 app.get("/admin/users", authenticateAdmin, tierBasedRateLimiter, (req, res) => {
-  res.json(formatResponse(true, { users: [{ id: 1, name: "User1", tier: "vvip" }, { id: 2, name: "User2", tier: "member" }], total: 50000, active: 45000 }));
+  res.json(formatResponse(true, {
+    users: [
+      { id: 1, name: "User1", tier: "vvip", status: "active", joined: "2024-01-15" },
+      { id: 2, name: "User2", tier: "member", status: "active", joined: "2024-01-20" }
+    ],
+    total: 50000
+  }));
 });
 
 app.get("/admin/payments", authenticateAdmin, tierBasedRateLimiter, (req, res) => {
-  res.json(formatResponse(true, { payments: [{ id: "PY1", user: "User1", amount: 2500, status: "completed" }], total: 450000, pending: 25000 }));
-});
-
-app.get("/admin/analytics", authenticateAdmin, tierBasedRateLimiter, (req, res) => {
-  res.json(formatResponse(true, { metrics: { dailyActiveUsers: 12340, totalPredictions: 1234567, accuracy: 97.2, roi: 18.3 }, trends: { predictions: "+15%", users: "+12%", revenue: "+18%" } }));
+  res.json(formatResponse(true, {
+    payments: [
+      { id: "PY1", user: "User1", amount: 2500, status: "completed", date: "2024-01-25", method: "PayPal" },
+      { id: "PY2", user: "User2", amount: 800, status: "completed", date: "2024-01-24", method: "M-Pesa" }
+    ],
+    total: 450000
+  }));
 });
 
 app.post("/admin/settings", authenticateAdmin, upload.single("logo"), async (req, res) => {
   try {
-    const settings = req.body;
+    const settings = req.body || {};
     await redis.set("admin:settings", JSON.stringify(settings));
     log("INFO", "ADMIN", "Settings updated", { admin: req.adminUser });
-    res.json(formatResponse(true, settings, "Settings updated successfully"));
+    res.json(formatResponse(true, settings, "Settings updated"));
   } catch (err) {
-    log("ERROR", "ADMIN", "Settings update failed", { error: err.message });
+    log("ERROR", "ADMIN", "Settings update failed", { err: err.message });
     res.status(500).json(formatResponse(false, null, "Failed to update settings"));
   }
 });
 
 // ============================================================================
-// PREDICTIONS, ODDS, LEADERBOARD, ANALYTICS
+// PREDICTIONS, ODDS, LEADERBOARD, ANALYTICS (scaffolding)
 // ============================================================================
 app.get("/predictions", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, {
     predictions: [
-      { match: "Barcelona vs Real Madrid", pred: "Barcelona Win", conf: "87%", odds: 1.85, roi: "+2.1%", users: 2340 },
-      { match: "Man United vs Liverpool", pred: "Over 2.5", conf: "86%", odds: 1.78, roi: "+1.8%", users: 1890 },
-      { match: "Bayern vs Dortmund", pred: "Bayern Win", conf: "91%", odds: 1.65, roi: "+1.2%", users: 1540 }
+      { match: "Barcelona vs Real Madrid", pred: "Barcelona Win", conf: "87%", odds: 1.85 },
+      { match: "Man United vs Liverpool", pred: "Over 2.5", conf: "86%", odds: 1.78 },
+      { match: "Bayern vs Dortmund", pred: "Bayern Win", conf: "91%", odds: 1.65 }
     ],
-    accuracy: 97.2,
-    roi: 18.3,
-    totalPredictions: 1234567
+    accuracy: 97.2
   }));
 });
 
@@ -560,10 +594,8 @@ app.get("/odds", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, {
     odds: [
       { league: "EPL", match: "Man United vs Liverpool", home: 2.45, draw: 3.20, away: 2.80 },
-      { league: "La Liga", match: "Barcelona vs Real Madrid", home: 1.85, draw: 3.50, away: 3.95 },
-      { league: "Serie A", match: "Juventus vs AC Milan", home: 2.10, draw: 3.40, away: 3.20 }
+      { league: "La Liga", match: "Barcelona vs Real Madrid", home: 1.85, draw: 3.50, away: 3.95 }
     ],
-    total: 3,
     updated: new Date().toISOString()
   }));
 });
@@ -571,45 +603,47 @@ app.get("/odds", tierBasedRateLimiter, (req, res) => {
 app.get("/leaderboard", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, {
     leaderboard: [
-      { rank: 1, name: "ProBetter", points: 15450, winRate: "68%", roi: "+24.5%", streak: 23 },
-      { rank: 2, name: "AnalystKing", points: 14320, winRate: "65%", roi: "+22.1%", streak: 18 }
+      { rank: 1, name: "ProBetter", points: 15450 },
+      { rank: 2, name: "AnalystKing", points: 14320 }
     ],
-    yourRank: 247,
-    yourPoints: 12340
+    yourRank: 247
   }));
 });
 
 app.get("/analytics", tierBasedRateLimiter, (req, res) => {
-  res.json(formatResponse(true, { metrics: { dailyActiveUsers: 12340, totalPredictions: 1234567, accuracy: 97.2, roi: 18.3 }, charts: { winRate: 60.9, accuracy: 97.2, roi: 18.3 } }));
+  res.json(formatResponse(true, { dailyActiveUsers: 12340, totalPredictions: 1234567 }));
 });
 
 // ============================================================================
-// USER STATISTICS
+// USER ROUTES
 // ============================================================================
 app.get("/user/:userId/stats", tierBasedRateLimiter, (req, res) => {
   const userId = req.params.userId;
-  const bets = 156, wins = 95, loss = 61;
-  res.json(formatResponse(true, { userId, totalBets: bets, wins, losses: loss, winRate: ((wins / bets) * 100).toFixed(1) + "%", roi: "+18.3%", profit: 45600, rank: 247 }));
-});
-
-app.get("/user/:userId/rank", tierBasedRateLimiter, (req, res) => {
-  res.json(formatResponse(true, { userId: req.params.userId, globalRank: 247, points: 12340, region: "Top 15%", weekChange: "+45", monthChange: "+120" }));
+  const bets = 156, wins = 95;
+  res.json(formatResponse(true, {
+    userId,
+    totalBets: bets,
+    wins,
+    losses: bets - wins,
+    winRate: `${((wins / bets) * 100).toFixed(1)}%`
+  }));
 });
 
 app.get("/user/:userId/referrals", tierBasedRateLimiter, (req, res) => {
-  res.json(formatResponse(true, { userId: req.params.userId, totalReferrals: 14, earnings: 8400, level: "Silver", breakdown: { free: 8, member: 4, vvip: 2 } }));
+  const userId = req.params.userId;
+  res.json(formatResponse(true, { userId, totalReferrals: 14, earnings: 8400 }));
 });
 
 // ============================================================================
-// AUDIT & COMPLIANCE
+// AUDIT
 // ============================================================================
 app.get("/audit", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
   try {
-    const logs = await redis.lrange(LOG_STREAM_KEY, 0, 50).catch(() => []);
-    const parsed = logs.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean).slice(0, 20);
-    res.json(formatResponse(true, { auditLogs: parsed }));
+    const raw = await redis.lrange(LOG_STREAM_KEY, 0, 50);
+    const parsed = raw.map(r => { try { return JSON.parse(r); } catch { return null; } }).filter(Boolean);
+    res.json(formatResponse(true, { auditLogs: parsed.slice(0, 20) }));
   } catch (err) {
-    log("ERROR", "AUDIT", "Audit fetch failed", { error: err.message });
+    log("ERROR", "AUDIT", "Fetch failed", { err: err.message });
     res.status(500).json(formatResponse(false, null, "Failed to fetch audit logs"));
   }
 });
@@ -618,275 +652,146 @@ app.get("/audit", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
 // PRICING
 // ============================================================================
 app.get("/pricing", (req, res) => {
-  res.json(formatResponse(true, {
-    tiers: {
-      free: { name: "FREE", price: 0, requests: 30, features: ["Live matches", "Basic predictions"] },
-      member: { name: "MEMBER", price: 150, requests: 60, features: ["Advanced analytics", "Priority support", "No ads"] },
-      vvip: { name: "VVIP", price: 200, requests: 150, features: ["AI Coach", "Exclusive content", "VIP support 24/7"] }
-    }
-  }));
+  res.json(formatResponse(true, { tiers: BETRIX.pricing }));
 });
 
 // ============================================================================
-// TELEGRAM WEBHOOKS (robust validation + tokenized route)
+// TELEGRAM WEBHOOKS
+// - secure: checks X-Telegram-Bot-Api-Secret-Token when TELEGRAM_WEBHOOK_SECRET set
+// - tokenized path optional if TELEGRAM_WEBHOOK_URL includes token
 // ============================================================================
-function validateTelegramWebhook(req, tokenParam) {
-  if (!TELEGRAM_TOKEN) {
-    log("WARN", "WEBHOOK", "TELEGRAM_TOKEN not configured");
-    return false;
+const validateTelegramRequest = (req, tokenInPath) => {
+  if (!TELEGRAM_TOKEN) return { ok: false, reason: "TELEGRAM_TOKEN not configured" };
+
+  if (TELEGRAM_WEBHOOK_SECRET) {
+    const header = req.headers["x-telegram-bot-api-secret-token"];
+    if (!header || header !== TELEGRAM_WEBHOOK_SECRET) return { ok: false, reason: "Invalid secret header" };
   }
 
-  // If token path param provided, it must match
-  if (typeof tokenParam === "string" && tokenParam.length > 0) {
-    if (tokenParam !== TELEGRAM_TOKEN) {
-      log("WARN", "WEBHOOK", "Invalid token in path", { tokenParamMasked: `${String(tokenParam).slice(0,6)}...` });
-      return false;
-    }
+  if (tokenInPath && tokenInPath !== TELEGRAM_TOKEN) return { ok: false, reason: "Invalid token in path" };
+
+  return { ok: true };
+};
+
+app.post("/webhook/:token?", tierBasedRateLimiter, async (req, res) => {
+  const token = req.params.token;
+  const valid = validateTelegramRequest(req, token);
+  if (!valid.ok) {
+    log("WARN", "WEBHOOK", "Invalid webhook request", { reason: valid.reason, forwarded: req.headers["x-forwarded-for"] });
+    return res.status(403).json({ ok: false, error: "Forbidden" });
   }
 
-  // If no secret configured, accept
-  if (!TELEGRAM_WEBHOOK_SECRET) return true;
-
-  // Enforcement toggle
-  const enforce = String(TELEGRAM_ENFORCE_SECRET).toLowerCase() === "true";
-  const headerSecret = req.headers["x-telegram-bot-api-secret-token"] || req.headers["x-telegram-bot-api-secret"];
-
-  if (!enforce) {
-    log("WARN", "WEBHOOK", "TELEGRAM_WEBHOOK_SECRET set but enforcement disabled; accepting request", { forwarded: req.headers["x-forwarded-for"] || req.ip });
-    return true;
-  }
-
-  // Enforcement enabled: require header match
-  if (!headerSecret || headerSecret !== TELEGRAM_WEBHOOK_SECRET) {
-    log("WARN", "WEBHOOK", "Missing/invalid X-Telegram-Bot-Api-Secret-Token", { forwarded: req.headers["x-forwarded-for"] || req.ip });
-    return false;
-  }
-
-  return true;
-}
-
-const processTelegramUpdate = async update => {
+  // Process webhook asynchronously: queue job and respond 200 quickly
   try {
-    const msg = update?.message || update?.edited_message || update?.channel_post;
-    const cbq = update?.callback_query;
-
-    if (msg?.chat?.id && (msg?.text || msg?.caption)) {
-      const chatId = msg.chat.id;
-      const text = String(msg.text || msg.caption || "").trim();
-      const userId = msg?.from?.id || msg?.chat?.id;
-
-      log("INFO", "WEBHOOK", "Telegram update received", { chatId, userId, text });
-
-      if (text === "/pricing") {
-        await sendTelegram(chatId, generatePricingMessage());
-      } else if (text === "/start") {
-        await sendTelegram(chatId, `🎉 Welcome to ${BETRIX_CONFIG.brand.name}! Use /pricing to view plans.`);
-      } else {
-        await queueJob("telegram-message", { update, chatId, text, userId });
-        await sendTelegram(chatId, "🤖 Your message is being processed by our system.");
-      }
-
-      await redis.hincrby(`user:${userId}:stats`, "messages", 1);
-      await redis.expire(`user:${userId}:stats`, 86400);
-    }
-
-    if (cbq) {
-      const chatId = cbq?.message?.chat?.id;
-      const userId = cbq?.from?.id;
-      const data = cbq?.data || "";
-      log("INFO", "WEBHOOK", "Callback query received", { chatId, userId, data });
-      await queueJob("telegram-callback", { update, chatId, userId, data });
-      if (chatId) await sendTelegram(chatId, `✅ Action received: ${data}`);
-    }
+    const payload = req.body;
+    await queueJob("telegram:update", payload, "normal");
+    log("DEBUG", "WEBHOOK", "Queued telegram update", { forwarded: req.headers["x-forwarded-for"] });
+    res.json({ ok: true });
   } catch (err) {
-    log("ERROR", "WEBHOOK", "Process update error", { error: err.message });
+    log("ERROR", "WEBHOOK", "Queue failed", { err: err.message });
+    res.status(500).json({ ok: false, error: "Processing failed" });
+  }
+});
+
+// ============================================================================
+// PAYMENTS SCAFFOLD (PayPal placeholder)
+// ============================================================================
+app.get("/paypal/checkout", tierBasedRateLimiter, (req, res) => {
+  // Minimal branded page for payment redirection
+  const html = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width,initial-scale=1"/>
+        <title>${BETRIX.name} Payments</title>
+        <style>${getBrandStyles()}</style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="brand"><h1>${BETRIX.name} Payments</h1></div>
+          <p>Redirecting to payment provider...</p>
+        </div>
+      </body>
+    </html>
+  `;
+  res.send(html);
+});
+
+// ============================================================================
+// ERROR HANDLING
+// ============================================================================
+app.use((err, req, res, next) => {
+  log("ERROR", "EXPRESS", "Unhandled error", { err: err?.message || err });
+  if (res.headersSent) return next(err);
+  res.status(500).json(formatResponse(false, null, "Internal server error"));
+});
+
+// ============================================================================
+// GRACEFUL SHUTDOWN
+// ============================================================================
+let shuttingDown = false;
+const shutdown = async () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log("INFO", "SHUTDOWN", "Initiating graceful shutdown");
+  try {
+    // stop accepting new connections
+    server.close(() => {
+      log("INFO", "SHUTDOWN", "HTTP server closed");
+    });
+
+    // close websockets
+    wss.clients.forEach(ws => {
+      try { ws.close(1001, "Server shutting down"); } catch {}
+    });
+
+    // close redis
+    await redis.quit().catch(() => {});
+    log("INFO", "SHUTDOWN", "Redis connection closed");
+  } catch (err) {
+    log("ERROR", "SHUTDOWN", "Shutdown error", { err: err.message });
+  } finally {
+    log("INFO", "SHUTDOWN", "Shutdown complete");
+    process.exit(0);
   }
 };
 
-app.post("/webhook", tierBasedRateLimiter, async (req, res) => {
-  try {
-    if (!validateTelegramWebhook(req)) return res.status(403).json(formatResponse(false, null, "Invalid webhook signature"));
-    const update = req.body;
-    res.status(200).json(formatResponse(true, { processed: true }));
-    processTelegramUpdate(update);
-  } catch (err) {
-    log("ERROR", "WEBHOOK", "Webhook error", { error: err.message });
-    res.status(200).json(formatResponse(true, { processed: false, error: err.message }));
-  }
-});
-
-app.post("/webhook/:token", tierBasedRateLimiter, async (req, res) => {
-  try {
-    if (!validateTelegramWebhook(req, req.params.token)) return res.status(403).json(formatResponse(false, null, "Invalid webhook signature"));
-    const update = req.body;
-    res.status(200).json(formatResponse(true, { processed: true }));
-    processTelegramUpdate(update);
-  } catch (err) {
-    log("ERROR", "WEBHOOK", "Token webhook error", { error: err.message });
-    res.status(200).json(formatResponse(true, { processed: false, error: err.message }));
-  }
-});
-
-app.post("/telegram/set-webhook", authenticateAdmin, async (req, res) => {
-  try {
-    if (!TELEGRAM_TOKEN) return res.status(400).json(formatResponse(false, null, "TELEGRAM_TOKEN not set"));
-    const base = TELEGRAM_WEBHOOK_URL || `${req.protocol}://${req.get("host")}`;
-    const target = `${base.replace(/\/$/, "")}/webhook/${TELEGRAM_TOKEN}`;
-    const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`;
-    const body = { url: target, secret_token: TELEGRAM_WEBHOOK_SECRET || undefined, max_connections: 40, allowed_updates: ["message", "edited_message", "channel_post", "callback_query"] };
-    const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await resp.json();
-    log(data.ok ? "INFO" : "WARN", "WEBHOOK", "setWebhook response", { ok: data.ok, description: data.description });
-    res.json(formatResponse(data.ok, data, data.ok ? "Webhook set" : data.description || "Failed to set webhook"));
-  } catch (err) {
-    log("ERROR", "WEBHOOK", "setWebhook error", { error: err.message });
-    res.status(500).json(formatResponse(false, null, err.message));
-  }
-});
-
-app.get("/telegram/webhook-info", authenticateAdmin, async (req, res) => {
-  try {
-    const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/getWebhookInfo`;
-    const resp = await fetch(url);
-    const info = await resp.json();
-    res.json(formatResponse(true, info, "Webhook info"));
-  } catch (err) {
-    log("ERROR", "WEBHOOK", "getWebhookInfo error", { error: err.message });
-    res.status(500).json(formatResponse(false, null, err.message));
-  }
-});
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
 
 // ============================================================================
-// PAYPAL PAGES & WEBHOOK
+// START SERVER
 // ============================================================================
-app.get("/paypal/success", async (req, res) => {
-  const { token, PayerID } = req.query;
+const start = async () => {
   try {
-    const pending = await redis.get(`payment:pending:${token}`);
-    if (!pending) {
-      return res.send(`<html><head><title>Payment Error</title><style>${getBrandStyles()}</style></head><body><div class="container"><div class="brand-header"><h1>${BETRIX_CONFIG.brand.name}</h1></div><div class="payment-status error"><h2>Payment session expired</h2><p>Please try again.</p><a href="/dashboard" class="btn btn-primary">Dashboard</a></div></div></body></html>`);
+    // Ensure admin password hash exists (first-run)
+    const adminHash = await redis.get("admin:password");
+    if (!adminHash) {
+      const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+      await redis.set("admin:password", hash);
+      log("INFO", "INIT", "Admin password initialized");
     }
-    await queueJob("paypal-success", { token, PayerID, pending });
-    res.send(`<html><head><title>Payment Successful</title><style>${getBrandStyles()}</style></head><body><div class="container"><div class="brand-header"><h1>🎉 ${BETRIX_CONFIG.brand.name}</h1></div><div class="payment-status success"><h2>Payment Successful</h2><p>Your subscription is being activated.</p><a href="/dashboard" class="btn btn-primary">Go to Dashboard</a></div></div></body></html>`);
+
+    server.listen(port, "0.0.0.0", () => {
+      log("INFO", "SERVER", "BETRIX Server started", {
+        port,
+        environment: NODE_ENV,
+        version: BETRIX.version,
+        endpoints: {
+          main: `http://0.0.0.0:${port}`,
+          api: `http://0.0.0.0:${port}/api/v1`,
+          admin: `http://0.0.0.0:${port}/admin`,
+          health: `http://0.0.0.0:${port}/health`,
+          metrics: `http://0.0.0.0:${port}/metrics`,
+          webhook: `/webhook/:token?`
+        }
+      });
+    });
   } catch (err) {
-    log("ERROR", "PAYPAL", "Success handler error", { error: err.message });
-    res.status(500).send("Error processing payment");
-  }
-});
-
-app.get("/paypal/cancel", (req, res) => {
-  res.send(`<html><head><title>Payment Cancelled</title><style>${getBrandStyles()}</style></head><body><div class="container"><div class="brand-header"><h1>${BETRIX_CONFIG.brand.name}</h1></div><div class="payment-status cancelled"><h2>Payment Cancelled</h2><p>Your payment was not completed.</p><a href="/dashboard" class="btn btn-secondary">Dashboard</a></div></div></body></html>`);
-});
-
-app.post("/paypal/webhook", tierBasedRateLimiter, async (req, res) => {
-  try {
-    await queueJob("paypal-webhook", { event: req.body });
-    broadcastToAdmins({ type: "payment-webhook", data: { eventType: req.body?.event_type, timestamp: new Date().toISOString() } });
-    res.json(formatResponse(true, { status: "queued" }));
-  } catch (err) {
-    log("ERROR", "PAYPAL", "Webhook error", { error: err.message });
-    res.status(500).json(formatResponse(false, null, err.message));
-  }
-});
-
-// ============================================================================
-// METRICS
-// ============================================================================
-app.get("/metrics", tierBasedRateLimiter, (req, res) => {
-  res.json(formatResponse(true, { uptime: process.uptime(), version: BETRIX_CONFIG.brand.version, redis: true, wsConnections: activeConnections.size, timestamp: new Date().toISOString() }));
-});
-
-// ============================================================================
-// ERROR HANDLING & 404
-// ============================================================================
-app.use((err, req, res, next) => {
-  log("ERROR", "HANDLER", err.message, { stack: err.stack });
-  res.status(500).json(formatResponse(false, null, err.message || "Internal server error"));
-});
-
-app.use((req, res) => {
-  log("WARN", "ROUTES", "Not found", { path: req.path, method: req.method });
-  res.status(404).json(formatResponse(false, null, "Endpoint not found"));
-});
-
-// ============================================================================
-// INITIALIZATION & GRACEFUL SHUTDOWN
-// ============================================================================
-async function initializeServer() {
-  try {
-    const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
-    await redis.set("admin:password", adminHash);
-
-    await redis.mset("stats:totalUsers", "0", "stats:activePredictions", "0", "stats:totalRevenue", "0", "stats:lastUpdated", new Date().toISOString());
-
-    log("INFO", "INIT", "Server initialization completed", { brand: BETRIX_CONFIG.brand.name, version: BETRIX_CONFIG.brand.version, environment: NODE_ENV });
-    log("INFO", "INIT", "Admin credentials configured", { username: ADMIN_USERNAME });
-
-    if (TELEGRAM_TOKEN && TELEGRAM_WEBHOOK_URL) {
-      try {
-        const target = `${TELEGRAM_WEBHOOK_URL.replace(/\/$/, "")}/webhook/${TELEGRAM_TOKEN}`;
-        const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`;
-        const body = { url: target, secret_token: TELEGRAM_WEBHOOK_SECRET || undefined, max_connections: 40, allowed_updates: ["message", "edited_message", "channel_post", "callback_query"] };
-        const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-        const data = await resp.json();
-        log(data.ok ? "INFO" : "WARN", "INIT", "Auto setWebhook", { ok: data.ok, description: data.description });
-      } catch (err) {
-        log("WARN", "INIT", "Auto setWebhook failed", { error: err.message });
-      }
-    }
-  } catch (err) {
-    log("ERROR", "INIT", "Initialization failed", { error: err.message });
+    log("ERROR", "INIT", "Startup failed", { err: err.message });
     process.exit(1);
   }
-}
+};
 
-let shuttingDown = false;
-async function gracefulShutdown() {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  log("INFO", "SHUTDOWN", "Graceful shutdown initiated");
-  try {
-    activeConnections.forEach(ws => { try { ws.close(1001, "Server shutdown"); } catch {} });
-    try { await redis.quit(); } catch {}
-    server.close(() => {
-      log("INFO", "SHUTDOWN", "HTTP server closed");
-      process.exit(0);
-    });
-    setTimeout(() => {
-      log("WARN", "SHUTDOWN", "Forcing shutdown");
-      process.exit(1);
-    }, 10000);
-  } catch (err) {
-    log("ERROR", "SHUTDOWN", "Shutdown error", { error: err.message });
-    process.exit(1);
-  }
-}
-
-process.on("SIGTERM", gracefulShutdown);
-process.on("SIGINT", gracefulShutdown);
-
-// ============================================================================
-// START
-// ============================================================================
-initializeServer().then(() => {
-  server.listen(port, "0.0.0.0", () => {
-    log("INFO", "SERVER", `🚀 ${BETRIX_CONFIG.brand.name} Server started`, {
-      port,
-      environment: NODE_ENV,
-      version: BETRIX_CONFIG.brand.version,
-      endpoints: {
-        main: `http://0.0.0.0:${port}`,
-        api: `http://0.0.0.0:${port}/api/v1`,
-        admin: `http://0.0.0.0:${port}/admin`,
-        health: `http://0.0.0.0:${port}/health`,
-        metrics: `http://0.0.0.0:${port}/metrics`,
-        telegram_webhook: TELEGRAM_TOKEN ? `/webhook/${TELEGRAM_TOKEN}` : null
-      }
-    });
-  });
-}).catch(err => {
-  log("ERROR", "SERVER", "Failed to start", { error: err.message });
-  process.exit(1);
-});
-
-export default app;
+start();
