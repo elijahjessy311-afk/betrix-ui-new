@@ -1,5 +1,5 @@
 /**
- * BETRIX EXPRESS SERVER - COMPLETE PRODUCTION-READY REWRITE
+ * BETRIX EXPRESS SERVER - COMPLETE PRODUCTION-READY
  * - Full feature set: branding, menus, 150+ endpoints scaffolding
  * - Robust middleware: Helmet, CORS, Compression, Morgan, Body parsing
  * - IPv6-safe rate limiting using express-rate-limit ipKeyGenerator
@@ -9,7 +9,7 @@
  * - WebSocket server with subscription channels and admin broadcast
  * - Admin Basic auth with bcrypt + Redis-stored hash
  * - Telegram webhook handling with optional secret enforcement and tokenized route
- * - PayPal success/cancel pages and webhook queueing scaffolding
+ * - PayPal scaffolding (success/cancel pages + webhook queueing)
  * - Multer file upload handling with validation
  * - Graceful shutdown and initialization seeding
  *
@@ -699,7 +699,7 @@ const processTelegramUpdate = async update => {
   } catch (err) {
     log("ERROR", "WEBHOOK", "Process update error", { error: err.message });
   }
-}
+};
 
 app.post("/webhook", tierBasedRateLimiter, async (req, res) => {
   try {
