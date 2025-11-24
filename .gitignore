@@ -1,27 +1,45 @@
-# Dependencies
+# ===================================================================
+# Node dependencies and lockfile handling
+# ===================================================================
+# Ignore node_modules (always)
 node_modules/
-package-lock.json
-npm-debug.log
-yarn-error.log
 
-# Environment
+# Keep package-lock.json tracked for reproducible installs
+# (do NOT ignore package-lock.json)
+# package-lock.json
+
+# npm debug logs
+npm-debug.log*
+yarn-error.log*
+
+# ===================================================================
+# Environment files
+# ===================================================================
+# Ignore local env files that contain secrets
 .env
 .env.local
 .env.*.local
 
-# Cache & Temp
+# ===================================================================
+# Cache, temp, and logs
+# ===================================================================
 .cache/
-.DS_Store
 tmp_*.json
 *.log
 cleanup-run.log
+.DS_Store
+Thumbs.db
 
-# Build & Dist
+# ===================================================================
+# Build output and distribution
+# ===================================================================
 dist/
 build/
 .next/
 
-# IDE & Editor
+# ===================================================================
+# IDE and editor files
+# ===================================================================
 .vscode/
 .idea/
 *.swp
@@ -31,21 +49,32 @@ build/
 .project
 .classpath
 
-# OS
-Thumbs.db
-.DS_Store
+# ===================================================================
+# Docker and CI artifacts
+# ===================================================================
+# Render uses render.yaml; keep Docker files ignored if you don't use them
+Dockerfile
+docker-compose.yml
+.dockerignore
 
-# Replit specific (DO NOT IGNORE)
-# .replit is needed - don't add it
-# replit.md is needed - don't add it
+# ===================================================================
+# Replit notes
+# ===================================================================
+# .replit and replit.md are required for Replit projects — do not ignore them
+# (kept here as a reminder; do not add .replit or replit.md to ignore)
 
-# Don't ignore critical files
+# ===================================================================
+# Explicit allow rules for critical repo files and folders
+# ===================================================================
+# Ensure source and key config files are tracked
 !src/
 !package.json
 !render.yaml
 !replit.md
 
-# Docker (Render uses render.yaml instead)
-Dockerfile
-docker-compose.yml
-.dockerignore
+# ===================================================================
+# Optional: lockfile policy
+# ===================================================================
+# If your team prefers to commit lockfiles, keep package-lock.json tracked.
+# If you intentionally want to ignore lockfiles, uncomment the next line:
+# package-lock.json
