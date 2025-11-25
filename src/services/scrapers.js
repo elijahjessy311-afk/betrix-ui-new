@@ -1,5 +1,5 @@
 import fetch from 'node-fetch';
-import cheerio from 'cheerio';
+import { load as loadCheerio } from 'cheerio';
 
 // Minimal polite scraper helpers for FBref / Understat
 class Scrapers {
@@ -36,7 +36,7 @@ class Scrapers {
       const allowed = await this.allowedByRobots(u.origin, u.pathname);
       if (!allowed) throw new Error('Scraping disallowed by robots.txt');
       const html = await this.fetchPage(teamUrl);
-      const $ = cheerio.load(html);
+      const $ = loadCheerio(html);
       // Best-effort: grab overall table of stats
       const summary = {};
       $('div.stats_pull').each((i, el) => {
@@ -55,7 +55,7 @@ class Scrapers {
       const allowed = await this.allowedByRobots(u.origin, u.pathname);
       if (!allowed) throw new Error('Scraping disallowed by robots.txt');
       const html = await this.fetchPage(teamUrl);
-      const $ = cheerio.load(html);
+      const $ = loadCheerio(html);
       // Understat often embeds JSON in scripts; try to extract any JSON-like patterns
       const scripts = $('script').map((i, s) => $(s).html()).get().join('\n');
       return { url: teamUrl, snippetLength: scripts.length };
