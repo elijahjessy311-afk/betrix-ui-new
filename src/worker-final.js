@@ -75,8 +75,13 @@ const ai = {
         await redis.set("ai:active", "gemini");
         await redis.expire("ai:active", 30);
         const out = await gemini.chat(message, context);
-        logger.info("AI response", { provider: "gemini", length: String(out || "").length });
-        return out;
+        const len = String(out || "").length;
+        if (len === 0) {
+          logger.warn("Gemini returned empty response, falling back to next provider");
+        } else {
+          logger.info("AI response", { provider: "gemini", length: len });
+          return out;
+        }
       } catch (err) {
         logger.warn("Gemini.chat failed for message, falling back", err?.message || String(err));
       }

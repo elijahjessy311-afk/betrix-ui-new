@@ -72,7 +72,17 @@ Now respond to the user's message with intelligence and personality.`;
         generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
       });
 
-      const text = result.response.text();
+      const text = result.response?.text?.() || "";
+      
+      // Debug: log the full response to detect issues
+      if (!text || text.trim().length === 0) {
+        logger.warn("Gemini returned empty response", {
+          status: result.response?.candidates?.[0]?.finishReason,
+          fullResponse: JSON.stringify(result.response)
+        });
+        return this.fallbackResponse(userMessage, context);
+      }
+      
       logger.info("Gemini response generated");
       return text;
     } catch (error) {
@@ -138,7 +148,13 @@ Now respond to the user's message with intelligence and personality.`;
         generationConfig: { maxOutputTokens: 300 },
       });
 
-      return result.response.text();
+      const text = result.response?.text?.() || "";
+      if (!text || text.trim().length === 0) {
+        logger.warn("Gemini analysis returned empty response");
+        return `Unable to analyze right now. Try again later.`;
+      }
+
+      return text;
     } catch (err) {
       logger.error("Analysis error", err);
       return `Unable to analyze right now. Try again later.`;
