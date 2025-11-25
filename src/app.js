@@ -25,6 +25,7 @@ import { fileURLToPath } from "url";
 import { WebSocketServer } from "ws";
 import { createServer } from "http";
 import multer from "multer";
+import { TelegramService } from "./services/telegram.js";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 
@@ -337,6 +338,15 @@ const queueJob = async (type, payload, priority = "normal") => {
   const id = Math.random().toString(36).slice(2, 12);
   const job = { id, type, payload, priority, ts: Date.now() };
   try {
+    // Special-case Telegram webhook updates: push directly to the worker queue
+    if (type === "telegram:update") {
+      // Some parts of the code push the raw update object; the worker expects the
+      // serialized update on the Redis list `telegram:updates` so push payload there.
+      await redis.rpush("telegram:updates", JSON.stringify(payload));
+      log("INFO", "QUEUE", "Queued telegram:update to telegram:updates", { id, size: JSON.stringify(payload).length });
+      return id;
+    }
+
     await redis.rpush(`jobs:${priority}`, JSON.stringify(job));
     log("INFO", "QUEUE", "Queued job", { id, type, priority });
     return id;
@@ -545,6 +555,20 @@ const start = async () => {
     server.listen(port, "0.0.0.0", () => {
       log("INFO", "SERVER", "BETRIX Server started", { port, environment: NODE_ENV, version: BETRIX.version });
     });
+    // Register webhook if configured
+    try {
+      if (TELEGRAM_TOKEN && process.env.TELEGRAM_WEBHOOK_URL) {
+        const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
+        const secret = TELEGRAM_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || null;
+        const tg = new TelegramService(TELEGRAM_TOKEN);
+        const resp = await tg.setWebhook(webhookUrl, ["message", "callback_query"], secret);
+        log("INFO", "TELEGRAM", "setWebhook response", { resp });
+      } else {
+        log("INFO", "TELEGRAM", "Webhook not configured - missing TELEGRAM_TOKEN or TELEGRAM_WEBHOOK_URL");
+      }
+    } catch (err) {
+      log("ERROR", "TELEGRAM", "Failed to set webhook", { err: err?.message || String(err) });
+    }
   } catch (err) {
     log("ERROR", "INIT", "Startup failed", { err: err.message });
     process.exit(1);

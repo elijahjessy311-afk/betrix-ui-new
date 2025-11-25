@@ -83,14 +83,20 @@ class TelegramService {
   /**
    * Set webhook
    */
-  async setWebhook(url, allowedUpdates = ["message", "callback_query"]) {
+  /**
+   * Set webhook with optional secret token
+   * @param {string} url
+   * @param {array} allowedUpdates
+   * @param {string} secretToken
+   */
+  async setWebhook(url, allowedUpdates = ["message", "callback_query"], secretToken = null) {
+    const body = { url, allowed_updates: allowedUpdates };
+    if (secretToken) body.secret_token = secretToken;
+
     return HttpClient.fetch(`${this.baseUrl}/setWebhook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url,
-        allowed_updates: allowedUpdates,
-      }),
+      body: JSON.stringify(body),
     }, "setWebhook");
   }
 
