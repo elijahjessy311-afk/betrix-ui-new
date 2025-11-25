@@ -33,6 +33,7 @@ import {
   handleBinanceWebhook,
   verifyPaymentManual
 } from "./handlers/payment-webhook.js";
+import { getMappingMisses, safeScanAndRepair } from './handlers/admin.js';
 import { GeminiService } from "./services/gemini.js";
 import { LocalAIService } from "./services/local-ai.js";
 import { HuggingFaceService } from "./services/huggingface.js";
@@ -690,6 +691,31 @@ app.get("/admin", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
   const raw = await redis.lrange(LOG_STREAM_KEY, 0, 19).catch(() => []);
   const logs = raw.map(r => { try { return JSON.parse(r); } catch { return null; } }).filter(Boolean);
   res.json(formatResponse(true, { menus: BETRIX.menu?.admin, recentLogs: logs }, "Admin overview"));
+});
+
+// Admin: mapping misses summary (past N days)
+app.get("/admin/mapping-misses", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
+  try {
+    const days = Number(req.query.days || 7);
+    const data = await getMappingMisses(redis, days);
+    return res.json(formatResponse(true, data, "Mapping misses"));
+  } catch (err) {
+    log("ERROR", "ADMIN", "mapping-misses failed", { err: err?.message || String(err) });
+    return res.status(500).json(formatResponse(false, null, "Failed to fetch mapping misses"));
+  }
+});
+
+// Admin: safe-scan and attempt to repair missing mappings (admin-run only)
+app.post("/admin/safe-scan", authenticateAdmin, tierBasedRateLimiter, express.json(), async (req, res) => {
+  try {
+    const scanLimit = Number(req.body.scanLimit || 2000);
+    const days = Number(req.body.days || 7);
+    const summary = await safeScanAndRepair(redis, { scanLimit, days });
+    return res.json(formatResponse(true, summary, "Safe-scan completed"));
+  } catch (err) {
+    log("ERROR", "ADMIN", "safe-scan failed", { err: err?.message || String(err) });
+    return res.status(500).json(formatResponse(false, null, "Safe-scan failed"));
+  }
 });
 
 app.post("/admin/settings", authenticateAdmin, upload.single("logo"), async (req, res) => {
