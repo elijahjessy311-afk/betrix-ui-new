@@ -13,6 +13,7 @@ import { UserService } from "./services/user.js";
 import { APIFootballService } from "./services/api-football.js";
 import { GeminiService } from "./services/gemini.js";
 import { LocalAIService } from "./services/local-ai.js";
+import { HuggingFaceService } from "./services/huggingface.js";
 import { BotHandlers } from "./handlers.js";
 import { AdvancedHandler } from "./advanced-handler.js";
 import { PremiumService } from "./services/premium.js";
@@ -53,41 +54,74 @@ const telegram = new TelegramService(CONFIG.TELEGRAM_TOKEN, CONFIG.TELEGRAM.SAFE
 const userService = new UserService(redis);
 const apiFootball = new APIFootballService(redis);
 const gemini = new GeminiService(CONFIG.GEMINI.API_KEY);
+const hfModels = process.env.HUGGINGFACE_MODELS || process.env.HUGGINGFACE_MODEL || null;
+const huggingface = new HuggingFaceService(hfModels, process.env.HUGGINGFACE_TOKEN);
 const localAI = new LocalAIService();
 
 // Composite AI wrapper: try Gemini per-request, fall back to LocalAI on errors.
 const ai = {
   name: "composite-ai",
   async chat(message, context) {
+    // Try Gemini first
     if (gemini && gemini.enabled) {
       try {
-        return await gemini.chat(message, context);
+        await redis.set("ai:active", "gemini");
+        await redis.expire("ai:active", 30);
+        const out = await gemini.chat(message, context);
+        logger.info("AI response", { provider: "gemini", length: String(out || "").length });
+        return out;
       } catch (err) {
-        logger.warn("Gemini.chat failed for message, falling back to LocalAI", err?.message || String(err));
-        try {
-          return await localAI.chat(message, context);
-        } catch (err2) {
-          logger.error("LocalAI fallback also failed", { err: err2?.message || String(err2) });
-          return gemini.fallbackResponse ? gemini.fallbackResponse(message, context) : "I'm having trouble right now. Try again later.";
-        }
+        logger.warn("Gemini.chat failed for message, falling back", err?.message || String(err));
       }
     }
 
-    // If Gemini not enabled, use LocalAI
-    return localAI.chat(message, context);
+    // Try HuggingFace if configured
+    if (huggingface && huggingface.isHealthy()) {
+      try {
+        await redis.set("ai:active", "huggingface");
+        await redis.expire("ai:active", 30);
+        const out = await huggingface.chat(message, context);
+        logger.info("AI response", { provider: "huggingface", model: huggingface.lastUsed || null, length: String(out || "").length });
+        return out;
+      } catch (err) {
+        logger.warn("HuggingFace.chat failed, falling back to LocalAI", err?.message || String(err));
+      }
+    }
+
+    // Fallback to LocalAI
+    try {
+      await redis.set("ai:active", "local");
+      await redis.expire("ai:active", 30);
+      const out = await localAI.chat(message, context);
+      logger.info("AI response", { provider: "local", length: String(out || "").length });
+      return out;
+    } catch (err) {
+      logger.error("LocalAI fallback also failed", { err: err?.message || String(err) });
+      if (gemini && typeof gemini.fallbackResponse === 'function') return gemini.fallbackResponse(message, context);
+      return "I'm having trouble right now. Try again later.";
+    }
   },
   async analyzeSport(sport, matchData, question) {
     if (gemini && gemini.enabled) {
       try {
         if (typeof gemini.analyzeSport === 'function') return await gemini.analyzeSport(sport, matchData, question);
       } catch (err) {
-        logger.warn('Gemini.analyzeSport failed, falling back to LocalAI', err?.message || String(err));
+        logger.warn('Gemini.analyzeSport failed, falling back', err?.message || String(err));
       }
     }
+
+    if (huggingface && huggingface.isHealthy()) {
+      try {
+        return await huggingface.analyzeSport(sport, matchData, question);
+      } catch (err) {
+        logger.warn('HuggingFace.analyzeSport failed, falling back', err?.message || String(err));
+      }
+    }
+
     return localAI.analyzeSport(sport, matchData, question);
   },
   isHealthy() {
-    return (gemini && gemini.enabled) || localAI.isHealthy();
+    return (gemini && gemini.enabled) || (huggingface && huggingface.isHealthy()) || localAI.isHealthy();
   }
 };
 const analytics = new AnalyticsService(redis);
@@ -105,18 +139,43 @@ let running = true; // flag used to gracefully stop the main loop on SIGTERM/SIG
 async function main() {
   logger.info("🌟 BETRIX Worker started - waiting for Telegram updates");
 
+  // On startup, move any items left in processing back to the main queue so they are retried
+  try {
+    let moved = 0;
+    while (true) {
+      const item = await redis.rpoplpush("telegram:processing", "telegram:updates");
+      if (!item) break;
+      moved += 1;
+      // avoid busy looping
+      if (moved % 100 === 0) await sleep(10);
+    }
+    if (moved > 0) logger.info(`Requeued ${moved} items from telegram:processing to telegram:updates`);
+  } catch (err) {
+    logger.warn("Failed to requeue processing list on startup", err?.message || String(err));
+  }
+
   while (running) {
     try {
-      const update = await redis.lpop("telegram:updates");
-      if (!update) {
-        await sleep(100);
+      // BRPOPLPUSH blocks until an item is available or timeout (5s)
+      const raw = await redis.brpoplpush("telegram:updates", "telegram:processing", 5);
+      if (!raw) {
+        // timeout expired, loop again to check running flag
         continue;
       }
 
-      const data = JSON.parse(update);
+  // mark which AI is active for observability (set before processing)
+  const preferred = (gemini && gemini.enabled) ? "gemini" : ((huggingface && huggingface.isHealthy()) ? "huggingface" : "local");
+  await redis.set("ai:active", preferred);
+  await redis.expire("ai:active", 30);
+
+      const data = JSON.parse(raw);
       await handleUpdate(data);
+
+      // remove the processed item from processing list
+      await redis.lrem("telegram:processing", 1, raw).catch(() => {});
     } catch (err) {
-      logger.error("Worker error", err);
+      logger.error("Worker error", err?.message || String(err));
+      // small backoff on error
       await sleep(1000);
     }
   }
@@ -158,8 +217,8 @@ async function handleUpdate(update) {
       if (cmd.startsWith("/")) {
         await handleCommand(chatId, userId, cmd, args, text);
       } else {
-        // Natural language
-        const response = await gemini.chat(text, await userService.getUser(userId));
+        // Natural language - use composite AI (Gemini -> HuggingFace -> LocalAI)
+        const response = await ai.chat(text, await userService.getUser(userId));
         await contextManager.recordMessage(userId, response, "bot");
         await telegram.sendMessage(chatId, response);
       }

@@ -26,6 +26,9 @@ import { WebSocketServer } from "ws";
 import { createServer } from "http";
 import multer from "multer";
 import { TelegramService } from "./services/telegram.js";
+import { GeminiService } from "./services/gemini.js";
+import { LocalAIService } from "./services/local-ai.js";
+import { HuggingFaceService } from "./services/huggingface.js";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 
@@ -412,6 +415,70 @@ app.get("/admin/webhook-info", async (req, res) => {
   } catch (err) {
     log("ERROR", "TELEGRAM", "getWebhookInfo failed", { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, "Failed to fetch webhook info"));
+  }
+});
+
+// Admin AI health: reports which AI integrations are enabled and last active provider
+app.get("/admin/ai-health", async (req, res) => {
+  try {
+    const geminiEnabled = !!process.env.GEMINI_API_KEY;
+  const huggingfaceModelsRaw = process.env.HUGGINGFACE_MODELS || process.env.HUGGINGFACE_MODEL || null;
+  const huggingfaceModels = huggingfaceModelsRaw ? huggingfaceModelsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const huggingfaceEnabled = huggingfaceModels.length > 0;
+    const localEnabled = true; // LocalAI is built-in
+    const lastActive = await redis.get("ai:active").catch(() => null);
+
+    return res.json(formatResponse(true, {
+      geminiEnabled,
+  huggingfaceEnabled,
+  huggingfaceModels,
+      localEnabled,
+      lastActive: lastActive || null
+    }, "AI health"));
+  } catch (err) {
+    log("ERROR", "ADMIN", "AI health check failed", { err: err?.message || String(err) });
+    return res.status(500).json(formatResponse(false, null, "AI health check failed"));
+  }
+});
+
+// Admin-only AI test endpoint - runs a short prompt through the composite chain and returns provider+response
+app.post("/admin/ai-test", authenticateAdmin, async (req, res) => {
+  try {
+    const prompt = req.body?.prompt || req.query?.prompt;
+    if (!prompt) return res.status(400).json(formatResponse(false, null, "Missing 'prompt' in body or query"));
+
+    // Build same composite chain locally in web process for testing (does not affect worker)
+    const geminiS = new GeminiService(process.env.GEMINI_API_KEY);
+    const hfModelsRaw = process.env.HUGGINGFACE_MODELS || process.env.HUGGINGFACE_MODEL || null;
+    const hf = new HuggingFaceService(hfModelsRaw, process.env.HUGGINGFACE_TOKEN);
+    const local = new LocalAIService();
+
+    // Try Gemini
+    if (geminiS && geminiS.enabled) {
+      try {
+        const out = await geminiS.chat(prompt, {});
+        return res.json(formatResponse(true, { provider: 'gemini', model: null, response: out }, 'AI test'));
+      } catch (err) {
+        log('WARN', 'AI-TEST', 'Gemini test failed, falling back', { err: err?.message || String(err) });
+      }
+    }
+
+    // Try HuggingFace
+    if (hf && hf.isHealthy()) {
+      try {
+        const out = await hf.chat(prompt);
+        return res.json(formatResponse(true, { provider: 'huggingface', model: hf.lastUsed || null, response: out }, 'AI test'));
+      } catch (err) {
+        log('WARN', 'AI-TEST', 'HuggingFace test failed, falling back', { err: err?.message || String(err) });
+      }
+    }
+
+    // Local fallback
+    const out = await local.chat(prompt);
+    return res.json(formatResponse(true, { provider: 'local', model: null, response: out }, 'AI test'));
+  } catch (err) {
+    log('ERROR', 'AI-TEST', 'AI test failed', { err: err?.message || String(err) });
+    return res.status(500).json(formatResponse(false, null, 'AI test failed'));
   }
 });
 
