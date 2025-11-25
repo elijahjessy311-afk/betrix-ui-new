@@ -54,8 +54,42 @@ const userService = new UserService(redis);
 const apiFootball = new APIFootballService(redis);
 const gemini = new GeminiService(CONFIG.GEMINI.API_KEY);
 const localAI = new LocalAIService();
-// Choose AI service: prefer Gemini when enabled, otherwise use local fallback
-const ai = (gemini && gemini.enabled) ? gemini : localAI;
+
+// Composite AI wrapper: try Gemini per-request, fall back to LocalAI on errors.
+const ai = {
+  name: "composite-ai",
+  async chat(message, context) {
+    if (gemini && gemini.enabled) {
+      try {
+        return await gemini.chat(message, context);
+      } catch (err) {
+        logger.warn("Gemini.chat failed for message, falling back to LocalAI", err?.message || String(err));
+        try {
+          return await localAI.chat(message, context);
+        } catch (err2) {
+          logger.error("LocalAI fallback also failed", { err: err2?.message || String(err2) });
+          return gemini.fallbackResponse ? gemini.fallbackResponse(message, context) : "I'm having trouble right now. Try again later.";
+        }
+      }
+    }
+
+    // If Gemini not enabled, use LocalAI
+    return localAI.chat(message, context);
+  },
+  async analyzeSport(sport, matchData, question) {
+    if (gemini && gemini.enabled) {
+      try {
+        if (typeof gemini.analyzeSport === 'function') return await gemini.analyzeSport(sport, matchData, question);
+      } catch (err) {
+        logger.warn('Gemini.analyzeSport failed, falling back to LocalAI', err?.message || String(err));
+      }
+    }
+    return localAI.analyzeSport(sport, matchData, question);
+  },
+  isHealthy() {
+    return (gemini && gemini.enabled) || localAI.isHealthy();
+  }
+};
 const analytics = new AnalyticsService(redis);
 const rateLimiter = new RateLimiter(redis);
 const contextManager = new ContextManager(redis);
