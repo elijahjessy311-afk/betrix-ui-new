@@ -11,8 +11,14 @@ class GeminiService {
   constructor(apiKey) {
     this.apiKey = apiKey;
     this.enabled = !!apiKey;
+    this.disabledByError = false; // flip to true if we detect an unrecoverable API/model error
     if (this.enabled) {
-      this.genAI = new GoogleGenerativeAI(apiKey);
+      try {
+        this.genAI = new GoogleGenerativeAI(apiKey);
+      } catch (err) {
+        logger.error('Failed to initialize GoogleGenerativeAI', err);
+        this.enabled = false;
+      }
     }
   }
 
@@ -71,7 +77,15 @@ Now respond to the user's message with intelligence and personality.`;
       logger.info("Gemini response generated");
       return text;
     } catch (error) {
+      // If we detect a 404 / model-not-found error, disable Gemini to avoid log spam
+      const msg = String(error?.message || "");
       logger.error("Gemini error", error);
+      if (!this.disabledByError && (msg.includes("404 Not Found") || msg.includes("not found") || msg.includes("models/gemini"))) {
+        logger.error("Disabling Gemini service due to unrecoverable model/API error (fallback enabled)");
+        this.disabledByError = true;
+        this.enabled = false;
+      }
+
       return this.fallbackResponse(userMessage, context);
     }
   }
