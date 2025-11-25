@@ -57,14 +57,6 @@ async function predictMatch({ home, away, homeOdds = null, awayOdds = null, home
 }
 
 export { decimalToImplied, kellyFraction, simpleModelProbability, predictMatch };
-/**
- * Analytics & Performance Tracking
- * Tracks predictions, user behavior, system performance
- */
-
-import { Logger } from "../utils/logger.js";
-
-const logger = new Logger("Analytics");
 
 class AnalyticsService {
   constructor(redis) {
