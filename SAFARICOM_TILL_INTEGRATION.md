@@ -2,7 +2,7 @@
 
 ## ✅ Integration Complete
 
-Your Safaricom till number **6062105** has been fully integrated into BETRIX bot.
+Your Safaricom till number **606215** has been fully integrated into BETRIX bot.
 
 ### 📱 How It Works
 
@@ -32,7 +32,7 @@ Follow these steps:
 1️⃣ Go to your M-Pesa menu
 2️⃣ Select "Lipa na M-Pesa"
 3️⃣ Select "Till Number"
-4️⃣ Enter Till: 6062105
+4️⃣ Enter Till: 606215
 5️⃣ Enter Amount: KES 150 (or selected tier)
 6️⃣ Enter Account: BETRIX - Member Access
 7️⃣ Enter your M-Pesa PIN
@@ -45,7 +45,7 @@ Follow these steps:
 
 | Field | Value |
 |-------|-------|
-| Till Number | **6062105** |
+| Till Number | **606215** |
 | Business | BETRIX |
 | Account | BETRIX |
 | Method | M-Pesa Lipa na M-Pesa |
@@ -57,7 +57,7 @@ Follow these steps:
 **In `src/config.js`:**
 ```javascript
 MPESA: {
-  TILL: process.env.MPESA_TILL || "6062105",
+   TILL: process.env.MPESA_TILL || "606215",
   ACCOUNT: process.env.MPESA_ACCOUNT || "BETRIX",
 }
 ```
@@ -67,7 +67,7 @@ MPESA: {
 export MPESA_TILL=6062105
 ```
 
-If not set, defaults to: **6062105**
+If not set, defaults to: **606215**
 
 ### 📊 Services Included
 
@@ -108,7 +108,7 @@ Payment menu now includes:
 1. **User pays via till**
    - Goes to M-Pesa menu
    - Uses Lipa na M-Pesa
-   - Enters till: 6062105
+   - Enters till: 606215
    - Completes payment
 
 2. **Bot records payment**
@@ -178,4 +178,4 @@ Users can now:
 
 **Status:** ✅ **LIVE AND READY**
 
-Users can now pay via Safaricom till 6062105 directly from the bot!
+Users can now pay via Safaricom till 606215 directly from the bot!

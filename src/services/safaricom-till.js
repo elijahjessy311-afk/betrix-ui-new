@@ -11,7 +11,7 @@ class SafaricomTillService {
   constructor(redis, config) {
     this.redis = redis;
     this.config = config;
-    this.tillNumber = config.MPESA.TILL || "6062105";
+    this.tillNumber = config.MPESA.TILL || process.env.MPESA_TILL || process.env.SAFARICOM_TILL_NUMBER || "606215";
     this.accountName = config.MPESA.ACCOUNT || "BETRIX";
   }
 

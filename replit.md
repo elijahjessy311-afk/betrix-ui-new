@@ -291,7 +291,7 @@ See: `BETSLIP_INTEGRATION_GUIDE.md` for usage
 
 Latest: `src/worker-db.js` - Database-integrated production worker
 Betslips: `src/services/betslip-*.js` - Professional betslip generation
-Payment: Safaricom Till 6062105 fully integrated + M-Pesa verification
+Payment: Safaricom Till 606215 fully integrated + M-Pesa verification
 Security: Validation, rate limiting, helmet headers, CORS, audit logs
 
 New Services:

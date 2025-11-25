@@ -29,6 +29,14 @@ import {
   formatSubscriptionDetails,
   TIERS
 } from './payment-handler.js';
+import {
+  getAvailablePaymentMethods,
+  createPaymentOrder,
+  generateSafaricomTillPayment,
+  getPaymentInstructions,
+  PAYMENT_PROVIDERS
+  , verifyAndActivatePayment
+} from './payment-router.js';
 
 const logger = new Logger('TelegramHandler');
 
@@ -462,6 +470,16 @@ export async function handleCallbackQuery(callbackQuery, redis, services) {
       return handleHelpCallback(data, chatId, userId, redis);
     }
 
+    // Handle payment verification
+    if (data.startsWith('verify_payment_')) {
+      return handlePaymentVerification(data, chatId, userId, redis);
+    }
+
+    // Handle payment method selection with tier
+    if (data.startsWith('pay_')) {
+      return handlePaymentMethodSelection(data, chatId, userId, redis, services);
+    }
+
     // Acknowledge callback
     return {
       method: 'answerCallbackQuery',
@@ -519,37 +537,152 @@ function handleSportCallback(data, chatId, userId, redis) {
  * Handle subscription callbacks
  */
 async function handleSubscriptionCallback(data, chatId, userId, redis, services) {
-  if (data === 'sub_manage') {
-    const subscription = await getUserSubscription(redis, userId);
+  try {
+    // Handle manage subscription
+    if (data === 'sub_manage') {
+      const subscription = await getUserSubscription(redis, userId);
+      return {
+        method: 'editMessageText',
+        chat_id: chatId,
+        message_id: undefined,
+        text: `Your current subscription:\n\n${formatSubscriptionDetails(subscription)}`,
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔙 Back', callback_data: 'menu_vvip' }]
+          ]
+        }
+      };
+    }
+
+    // Handle tier selection (sub_free, sub_pro, sub_vvip, sub_plus)
+    if (data.startsWith('sub_')) {
+      const tier = data.replace('sub_', '').toUpperCase();
+      const tierConfig = TIERS[tier];
+      
+      if (!tierConfig) {
+        return {
+          method: 'answerCallbackQuery',
+          callback_query_id: undefined,
+          text: '❌ Invalid tier selection',
+          show_alert: false
+        };
+      }
+
+      // Get user's region (default KE for now)
+      const userRegion = await redis.hget(`user:${userId}:profile`, 'region') || 'KE';
+      
+      // Get available payment methods for region
+      const paymentMethods = getAvailablePaymentMethods(userRegion);
+
+      // Persist selected tier for this user for 15 minutes so payment callbacks can reference it
+      try {
+        await redis.setex(`user:${userId}:pending_payment`, 900, JSON.stringify({ tier, createdAt: Date.now() }));
+      } catch (e) {
+        logger.warn('Failed to persist pending payment', e);
+      }
+      
+      return {
+        method: 'sendMessage',
+        chat_id: chatId,
+        text: `🌀 *${tierConfig.name}* - KES ${tierConfig.price}/month\n\n✨ *Features:*\n${tierConfig.features.map(f => `• ${f}`).join('\n')}\n\n*Select payment method:*`,
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: buildPaymentMethodButtons(paymentMethods, tier)
+        }
+      };
+    }
+
+    // Handle subscription tier selection from main menu
+    const tier = data.replace('sub_', '').toUpperCase();
+    const tierConfig = TIERS[tier];
+
+    if (!tierConfig) {
+      return {
+        method: 'answerCallbackQuery',
+        callback_query_id: undefined,
+        text: '❌ Invalid tier selection',
+        show_alert: false
+      };
+    }
+
     return {
-      method: 'editMessageText',
+      method: 'sendMessage',
       chat_id: chatId,
-      message_id: undefined,
-      text: `Your current subscription:\n\n${formatSubscriptionDetails(subscription)}`,
+      text: `💳 Ready to upgrade to ${tierConfig.name}?\n\nKES ${tierConfig.price}/month\n\nClick Pay to continue.`,
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
+          [{ text: '💳 Proceed to Payment', callback_data: `pay_${tier}` }],
           [{ text: '🔙 Back', callback_data: 'menu_vvip' }]
         ]
       }
     };
+  } catch (error) {
+    logger.error('Subscription callback error:', error);
+    return {
+      method: 'sendMessage',
+      chat_id: chatId,
+      text: '❌ An error occurred. Please try again.',
+      parse_mode: 'Markdown'
+    };
   }
+}
 
-  // Extract tier from data
-  const tier = data.replace('sub_upgrade_', '').toUpperCase();
-
-  return {
-    method: 'sendMessage',
-    chat_id: chatId,
-    text: `💳 Ready to upgrade to ${TIERS[tier].name}?\n\n$${TIERS[tier].price}/month\n\nClick Pay to continue.`,
-    parse_mode: 'Markdown',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '💳 Proceed to Payment', callback_data: `pay_${tier}` }],
-        [{ text: '🔙 Back', callback_data: 'menu_vvip' }]
-      ]
-    }
-  };
+/**
+ * Build payment method buttons based on available methods
+ */
+function buildPaymentMethodButtons(methods, tier) {
+  const buttons = [];
+  
+  // Safaricom Till (high priority for KE)
+  if (methods.includes('SAFARICOM_TILL')) {
+    const TILL_NUMBER = process.env.MPESA_TILL || process.env.SAFARICOM_TILL_NUMBER || '606215';
+    buttons.push([{
+      text: `🏪 Safaricom Till #${TILL_NUMBER} (Recommended)`,
+      callback_data: `pay_safaricom_till_${tier}`
+    }]);
+  }
+  
+  // M-Pesa
+  if (methods.includes('MPESA')) {
+    buttons.push([{
+      text: '📱 M-Pesa STK Push',
+      callback_data: `pay_mpesa_${tier}`
+    }]);
+  }
+  
+  // PayPal
+  if (methods.includes('PAYPAL')) {
+    buttons.push([{
+      text: '💳 PayPal',
+      callback_data: `pay_paypal_${tier}`
+    }]);
+  }
+  
+  // Binance
+  if (methods.includes('BINANCE')) {
+    buttons.push([{
+      text: '₿ Binance Pay',
+      callback_data: `pay_binance_${tier}`
+    }]);
+  }
+  
+  // SWIFT
+  if (methods.includes('SWIFT')) {
+    buttons.push([{
+      text: '🏦 Bank Transfer (SWIFT)',
+      callback_data: `pay_swift_${tier}`
+    }]);
+  }
+  
+  // Back button
+  buttons.push([{
+    text: '🔙 Back',
+    callback_data: 'menu_vvip'
+  }]);
+  
+  return buttons;
 }
 
 /**
@@ -587,6 +720,120 @@ function handleHelpCallback(data, chatId, userId, redis) {
     text: responses[data] || 'Help section',
     parse_mode: 'Markdown'
   };
+}
+
+/**
+ * Handle payment method selection with tier extraction
+ */
+async function handlePaymentMethodSelection(data, chatId, userId, redis, services) {
+  try {
+    const parts = data.split('_');
+    // Format: pay_METHOD or pay_METHOD_TIER
+    const paymentMethod = parts.slice(1, -1).join('_').toUpperCase();
+    const tier = parts[parts.length - 1].toUpperCase();
+
+    // If tier is not provided in the callback (older buttons), try to read pending tier
+    let selectedTier = tier;
+    if (!selectedTier || selectedTier === '') {
+      try {
+        const pending = await redis.get(`user:${userId}:pending_payment`);
+        if (pending) {
+          const pendingObj = JSON.parse(pending);
+          selectedTier = pendingObj.tier || selectedTier;
+        }
+      } catch (e) {
+        logger.warn('Failed to read pending tier from redis', e);
+      }
+    }
+
+    const userRegion = await redis.hget(`user:${userId}:profile`, 'region') || 'KE';
+    
+    // Validate region
+    if (paymentMethod === 'SAFARICOM_TILL' && userRegion !== 'KE') {
+      return {
+        method: 'answerCallbackQuery',
+        callback_query_id: undefined,
+        text: '🇰🇪 Safaricom Till only available in Kenya',
+        show_alert: true
+      };
+    }
+
+    // Create payment order
+    const order = await createPaymentOrder(
+      redis,
+      userId,
+      selectedTier,
+      paymentMethod,
+      userRegion
+    );
+
+    // Get payment instructions
+    const instructions = await getPaymentInstructions(redis, order.orderId, paymentMethod);
+
+    return {
+      method: 'sendMessage',
+      chat_id: chatId,
+      text: instructions.text,
+      parse_mode: instructions.parseMode || 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '✅ I have paid', callback_data: `verify_payment_${order.orderId}` }],
+          [{ text: '🔙 Change method', callback_data: 'menu_vvip' }]
+        ]
+      }
+    };
+  } catch (error) {
+    logger.error('Payment method selection error:', error);
+    return {
+      method: 'sendMessage',
+      chat_id: chatId,
+      text: `❌ Payment setup failed: ${error.message}`,
+      parse_mode: 'Markdown'
+    };
+  }
+}
+
+/**
+ * Handle payment verification when user confirms payment
+ */
+async function handlePaymentVerification(data, chatId, userId, redis) {
+  try {
+    const orderId = data.replace('verify_payment_', '');
+    // Use payment-router's verification to ensure consistent activation
+    try {
+      const verification = await verifyAndActivatePayment(redis, orderId, `manual_${Date.now()}`);
+      const tier = verification.tier;
+      const tierConfig = TIERS[tier] || { name: tier, features: [] };
+
+      return {
+        method: 'sendMessage',
+        chat_id: chatId,
+        text: `✅ *Payment Confirmed!*\n\n🎉 Welcome to ${tierConfig.name}!\n\n✨ *Features unlocked:*\n${(tierConfig.features || []).map(f => `• ${f}`).join('\n')}\n\nEnjoy your premium experience with 🌀 BETRIX!`,
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🎯 Back to Main Menu', callback_data: 'menu_main' }]
+          ]
+        }
+      };
+    } catch (e) {
+      logger.error('Payment verification failed', e);
+      return {
+        method: 'sendMessage',
+        chat_id: chatId,
+        text: `❌ Verification failed: ${e.message || 'unknown error'}`,
+        parse_mode: 'Markdown'
+      };
+    }
+  } catch (error) {
+    logger.error('Payment verification error:', error);
+    return {
+      method: 'sendMessage',
+      chat_id: chatId,
+      text: `❌ Verification failed: ${error.message}\n\nPlease contact support or try again.`,
+      parse_mode: 'Markdown'
+    };
+  }
 }
 
 export default {

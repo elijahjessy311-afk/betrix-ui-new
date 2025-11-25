@@ -33,7 +33,7 @@ const CONFIG = {
     PASSKEY: process.env.MPESA_PASSKEY,
     CALLBACK_URL: process.env.MPESA_CALLBACK_URL,
     PAYBILL: process.env.MPESA_PAYBILL,
-    TILL: process.env.MPESA_TILL || "6062105", // Safaricom Till Number
+    TILL: process.env.MPESA_TILL || process.env.SAFARICOM_TILL_NUMBER || "606215", // Safaricom Till Number
     ACCOUNT: process.env.MPESA_ACCOUNT || "BETRIX",
     API_BASE: (process.env.MPESA_ENV === "production")
       ? "https://api.safaricom.co.ke"

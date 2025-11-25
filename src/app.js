@@ -26,6 +26,13 @@ import { WebSocketServer } from "ws";
 import { createServer } from "http";
 import multer from "multer";
 import { TelegramService } from "./services/telegram.js";
+import {
+  handleMpesaCallback,
+  handleSafaricomTillCallback,
+  handlePayPalWebhook,
+  handleBinanceWebhook,
+  verifyPaymentManual
+} from "./handlers/payment-webhook.js";
 import { GeminiService } from "./services/gemini.js";
 import { LocalAIService } from "./services/local-ai.js";
 import { HuggingFaceService } from "./services/huggingface.js";
@@ -870,6 +877,95 @@ app.get("/paypal/checkout", tierBasedRateLimiter, (req, res) => {
   const html = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${BETRIX.name} Payments</title><style>body{font-family:Segoe UI,Arial;background:#f6f8fb;padding:40px} .container{max-width:600px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.08)}</style></head><body><div class="container"><h1>${BETRIX.name} Payments</h1><p>Redirecting to payment provider...</p></div></body></html>`;
   res.send(html);
 });
+
+// ============================================================================
+// PAYMENT WEBHOOKS
+// ============================================================================
+// M-Pesa STK Push callback
+app.post(
+  "/webhook/payment/mpesa",
+  tierBasedRateLimiter,
+  express.json({ limit: "1mb" }),
+  async (req, res) => {
+    try {
+      const tg = new TelegramService(TELEGRAM_TOKEN);
+      const result = await handleMpesaCallback(req, redis, tg);
+      return res.status(result?.success ? 200 : 400).json(result);
+    } catch (err) {
+      log("ERROR", "PAYMENTS", "M-Pesa webhook failed", { err: err?.message || String(err) });
+      return res.status(500).json(formatResponse(false, null, "M-Pesa webhook error"));
+    }
+  }
+);
+
+// Safaricom Till confirmation
+app.post(
+  "/webhook/payment/till",
+  tierBasedRateLimiter,
+  express.json({ limit: "1mb" }),
+  async (req, res) => {
+    try {
+      const tg = new TelegramService(TELEGRAM_TOKEN);
+      const result = await handleSafaricomTillCallback(req, redis, tg);
+      return res.status(result?.success ? 200 : 400).json(result);
+    } catch (err) {
+      log("ERROR", "PAYMENTS", "Till webhook failed", { err: err?.message || String(err) });
+      return res.status(500).json(formatResponse(false, null, "Till webhook error"));
+    }
+  }
+);
+
+// PayPal webhook
+app.post(
+  "/webhook/payment/paypal",
+  tierBasedRateLimiter,
+  express.json({ limit: "1mb" }),
+  async (req, res) => {
+    try {
+      const tg = new TelegramService(TELEGRAM_TOKEN);
+      const result = await handlePayPalWebhook(req, redis, tg);
+      return res.status(result?.success ? 200 : 400).json(result);
+    } catch (err) {
+      log("ERROR", "PAYMENTS", "PayPal webhook failed", { err: err?.message || String(err) });
+      return res.status(500).json(formatResponse(false, null, "PayPal webhook error"));
+    }
+  }
+);
+
+// Binance webhook
+app.post(
+  "/webhook/payment/binance",
+  tierBasedRateLimiter,
+  express.json({ limit: "1mb" }),
+  async (req, res) => {
+    try {
+      const tg = new TelegramService(TELEGRAM_TOKEN);
+      const result = await handleBinanceWebhook(req, redis, tg);
+      return res.status(result?.success ? 200 : 400).json(result);
+    } catch (err) {
+      log("ERROR", "PAYMENTS", "Binance webhook failed", { err: err?.message || String(err) });
+      return res.status(500).json(formatResponse(false, null, "Binance webhook error"));
+    }
+  }
+);
+
+// Manual verify (user clicked "I have paid") - orderId in URL
+app.post(
+  "/webhook/payment/manual/:orderId",
+  tierBasedRateLimiter,
+  express.json({ limit: "1mb" }),
+  async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const tg = new TelegramService(TELEGRAM_TOKEN);
+      const result = await verifyPaymentManual(req, redis, tg, orderId);
+      return res.status(result?.success ? 200 : 400).json(result);
+    } catch (err) {
+      log("ERROR", "PAYMENTS", "Manual verify failed", { err: err?.message || String(err) });
+      return res.status(500).json(formatResponse(false, null, "Manual verify error"));
+    }
+  }
+);
 
 // ============================================================================
 // ERROR HANDLING & 404

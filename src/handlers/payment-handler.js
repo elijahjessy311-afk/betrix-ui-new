@@ -7,7 +7,7 @@ import { Logger } from '../utils/logger.js';
 
 const logger = new Logger('PaymentHandler');
 
-// Subscription tiers and pricing (in USD)
+// Subscription tiers and pricing (in KES)
 export const TIERS = {
   FREE: {
     name: 'Free',
@@ -24,7 +24,7 @@ export const TIERS = {
   PRO: {
     name: 'Pro',
     symbol: '📊',
-    price: 9.99,
+    price: 899,
     billingPeriod: 'month',
     features: [
       'All FREE features',
@@ -37,7 +37,7 @@ export const TIERS = {
   VVIP: {
     name: 'VVIP',
     symbol: '👑',
-    price: 29.99,
+    price: 2699,
     billingPeriod: 'month',
     features: [
       'All PRO features',
@@ -51,7 +51,7 @@ export const TIERS = {
   PLUS: {
     name: 'BETRIX Plus',
     symbol: '💎',
-    price: 99.99,
+    price: 8999,
     billingPeriod: 'month',
     features: [
       'All VVIP features',

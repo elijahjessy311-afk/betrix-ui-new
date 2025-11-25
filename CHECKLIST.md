@@ -20,7 +20,7 @@
 - Automatic tier activation
 - Transaction recording
 - Receipt generation
-- Till 6062105 support
+- Till 606215 support
 
 ### 4. Phone Verification ✅
 - Twilio OTP service

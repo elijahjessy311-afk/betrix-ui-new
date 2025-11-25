@@ -9,6 +9,7 @@ const logger = new Logger('MenuHandler');
 
 const BETRIX_EMOJI = '🌀';
 const BETRIX_HEADER = `${BETRIX_EMOJI} *BETRIX* - Premium Sports Analytics`;
+const TILL_NUMBER = process.env.MPESA_TILL || process.env.SAFARICOM_TILL_NUMBER || '606215';
 
 export const mainMenu = {
   text: `${BETRIX_HEADER}
@@ -81,25 +82,41 @@ export const subscriptionMenu = {
 • 🔔 Custom notifications
 • 💳 No ads
 
-💰 *Pricing:*
+💰 *Pricing (KES):*
 • Free: Community access
-• Pro: $9.99/month
-• VVIP: $29.99/month
-• *BETRIX Plus Bundle:* $99.99/month (all features)
+• Pro: KES 899/month
+• VVIP: KES 2,699/month
+• *BETRIX Plus Bundle:* KES 8,999/month
+
+*Payment Options:*
+🏪 Pay via Safaricom Till #${TILL_NUMBER} (Instant)
+📱 M-Pesa (STK Push)
+💳 PayPal
+₿ Binance Pay / Bitcoin
+🏦 Bank Transfer (SWIFT)
 
 *Choose your plan:*`,
   
   reply_markup: {
     inline_keyboard: [
       [
-        { text: '⭐ Free (Upgrade)', callback_data: 'sub_upgrade_pro' },
-        { text: '👑 Pro Tier', callback_data: 'sub_upgrade_vvip' }
+        { text: '⭐ Free (Explore)', callback_data: 'sub_free' },
+        { text: '📊 Pro Tier', callback_data: 'sub_pro' }
       ],
       [
-        { text: '💎 BETRIX Plus', callback_data: 'sub_upgrade_plus' }
+        { text: '👑 VVIP (Most Popular)', callback_data: 'sub_vvip' },
+        { text: '💎 BETRIX Plus', callback_data: 'sub_plus' }
       ],
       [
-        { text: '💳 Manage Subscription', callback_data: 'sub_manage' },
+        { text: `🏪 Safaricom Till #${TILL_NUMBER}`, callback_data: 'pay_till' },
+        { text: '📱 M-Pesa', callback_data: 'pay_mpesa' }
+      ],
+      [
+        { text: '💳 PayPal', callback_data: 'pay_paypal' },
+        { text: '₿ Binance', callback_data: 'pay_binance' }
+      ],
+      [
+        { text: '🏦 Bank Transfer', callback_data: 'pay_swift' },
         { text: '🔙 Back', callback_data: 'menu_main' }
       ]
     ]

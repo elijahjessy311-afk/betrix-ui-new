@@ -38,7 +38,7 @@ TWILIO_PHONE_NUMBER=+1234567890
 # M-Pesa
 MPESA_CONSUMER_KEY=your_key
 MPESA_CONSUMER_SECRET=your_secret
-MPESA_TILL=6062105
+MPESA_TILL=606215
 MPESA_CALLBACK_URL=https://your-domain.com/webhook/mpesa
 
 # PayPal (optional)

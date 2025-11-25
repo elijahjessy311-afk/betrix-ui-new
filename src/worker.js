@@ -11,6 +11,8 @@ import fetch from "node-fetch";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import express from "express";
 import crypto from "crypto";
+import { createPaymentOrder, getPaymentInstructions } from "./handlers/payment-router.js";
+import paypalSdk from '@paypal/checkout-server-sdk';
 
 console.log("\n - worker.js:15" + "=".repeat(130));
 console.log("[🚀 BETRIX] ULTIMATE UNIFIED PRODUCTION WORKER  3000+ LINES - worker.js:16");
@@ -1170,23 +1172,66 @@ const paymentEngine = {
   async initiatePayPal(userId, amount, plan) {
     try {
       console.log(`[PAYMENT] INITIATE PAYPAL: ${amount} from user ${userId} (plan: ${plan}) - worker.js:1172`);
-      
-      const paymentId = genId("PAYPAL:");
-      const payment = {
-        id: paymentId,
-        userId,
-        status: "pending",
-        method: "paypal",
-        amount,
-        currency: "USD",
-        plan,
-        timestamp: Date.now()
-      };
+      // Create a canonical payment order using the unified payment router so
+      // webhooks can match provider callbacks by providerRef without scanning.
+      const userRegion = await redis.hget(`user:${userId}:profile`, 'region') || 'US';
 
-      await redis.set(paymentId, JSON.stringify(payment), "EX", 300);
-      
-      console.log(`[PAYMENT] ✓ PayPal payment initiated: ${paymentId} - worker.js:1188`);
-      return { success: true, paymentId, amount, currency: "USD" };
+      // Attempt to create a real PayPal order (SDK) when credentials are present.
+      let paypalOrderId = genId("PPORD:");
+      let approveLink = null;
+      const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+      const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
+      const PAYPAL_MODE = (process.env.PAYPAL_MODE || 'sandbox').toLowerCase();
+
+      if (PAYPAL_CLIENT_ID && PAYPAL_CLIENT_SECRET) {
+        try {
+          const environment = (PAYPAL_MODE === 'live' || PAYPAL_MODE === 'production')
+            ? new paypalSdk.core.LiveEnvironment(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET)
+            : new paypalSdk.core.SandboxEnvironment(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET);
+          const client = new paypalSdk.core.PayPalHttpClient(environment);
+
+          const request = new paypalSdk.orders.OrdersCreateRequest();
+          request.prefer('return=representation');
+          request.requestBody({
+            intent: 'CAPTURE',
+            purchase_units: [{ amount: { currency_code: 'USD', value: String(amount) } }],
+            application_context: {
+              return_url: process.env.PAYPAL_RETURN_URL || 'https://betrix.app/pay/paypal/return',
+              cancel_url: process.env.PAYPAL_CANCEL_URL || 'https://betrix.app/pay/paypal/cancel'
+            }
+          });
+
+          const resp = await client.execute(request);
+          if (resp && resp.result && resp.result.id) {
+            paypalOrderId = resp.result.id;
+            approveLink = (resp.result.links || []).find(l => l.rel === 'approve')?.href || null;
+          }
+        } catch (e) {
+          console.warn('[PAYMENT] PayPal SDK order creation failed, falling back to generated id', e.message || e);
+        }
+      }
+
+      // Create the order in the router. Pass providerRef and optional checkout URL
+      // in metadata so we can map provider callbacks to this order and show the
+      // PayPal approval link to the user.
+      const order = await createPaymentOrder(redis, userId, plan, 'PAYPAL', userRegion, { providerRef: paypalOrderId, checkoutUrl: approveLink });
+
+      // Ensure providerRef is stored at top-level for quick lookups and update
+      // the stored order and quick mapping to providerRef.
+      try {
+        order.providerRef = paypalOrderId;
+        await redis.setex(`payment:order:${order.orderId}`, 900, JSON.stringify(order));
+        await redis.setex(`payment:by_provider_ref:PAYPAL:${paypalOrderId}`, 900, order.orderId);
+      } catch (e) {
+        console.warn('[PAYMENT] Warning: failed to persist paypal provider mappings - worker.js:1199', e.message);
+      }
+
+      // Return instructions (checkout URL) so the caller can present the user
+      // with a PayPal checkout link or button.
+      const instructions = await getPaymentInstructions(redis, order.orderId, 'PAYPAL');
+
+      console.log(`[PAYMENT] ✓ PayPal order created: ${order.orderId} (providerRef=${paypalOrderId}) - worker.js:1218`);
+      return { success: true, orderId: order.orderId, paypalOrderId, instructions };
     } catch (err) {
       console.error(`[PAYMENT] ❌ PayPal initiation failed: - worker.js:1191`, err.message);
       return { success: false, error: "PayPal initiation failed" };
