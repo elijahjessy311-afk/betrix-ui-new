@@ -12,6 +12,7 @@ import { TelegramService } from "./services/telegram.js";
 import { UserService } from "./services/user.js";
 import { APIFootballService } from "./services/api-football.js";
 import { GeminiService } from "./services/gemini.js";
+import { LocalAIService } from "./services/local-ai.js";
 import { BotHandlers } from "./handlers.js";
 import { AdvancedHandler } from "./advanced-handler.js";
 import { PremiumService } from "./services/premium.js";
@@ -34,6 +35,9 @@ const redis = new Redis(CONFIG.REDIS_URL);
 redis.on("error", err => logger.error("Redis error", err));
 redis.on("connect", () => logger.info("✅ Redis connected"));
 
+// small sleep helper used in the main loop
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Worker heartbeat: update a small Redis key periodically so the web process can check worker health
 setInterval(async () => {
   try {
@@ -49,24 +53,29 @@ const telegram = new TelegramService(CONFIG.TELEGRAM_TOKEN, CONFIG.TELEGRAM.SAFE
 const userService = new UserService(redis);
 const apiFootball = new APIFootballService(redis);
 const gemini = new GeminiService(CONFIG.GEMINI.API_KEY);
+const localAI = new LocalAIService();
+// Choose AI service: prefer Gemini when enabled, otherwise use local fallback
+const ai = (gemini && gemini.enabled) ? gemini : localAI;
 const analytics = new AnalyticsService(redis);
 const rateLimiter = new RateLimiter(redis);
 const contextManager = new ContextManager(redis);
-const basicHandlers = new BotHandlers(telegram, userService, apiFootball, gemini, redis);
-const advancedHandler = new AdvancedHandler(basicHandlers, redis, telegram, userService, gemini);
-const premiumService = new PremiumService(redis, gemini);
+const basicHandlers = new BotHandlers(telegram, userService, apiFootball, ai, redis);
+const advancedHandler = new AdvancedHandler(basicHandlers, redis, telegram, userService, ai);
+const premiumService = new PremiumService(redis, ai);
 const adminDashboard = new AdminDashboard(redis, telegram, analytics);
 
 logger.info("🚀 BETRIX Final Worker - All Services Initialized");
 
+let running = true; // flag used to gracefully stop the main loop on SIGTERM/SIGINT
+
 async function main() {
   logger.info("🌟 BETRIX Worker started - waiting for Telegram updates");
 
-  while (true) {
+  while (running) {
     try {
       const update = await redis.lpop("telegram:updates");
       if (!update) {
-        await new Promise(r => setTimeout(r, 100));
+        await sleep(100);
         continue;
       }
 
@@ -74,9 +83,11 @@ async function main() {
       await handleUpdate(data);
     } catch (err) {
       logger.error("Worker error", err);
-      await new Promise(r => setTimeout(r, 1000));
+      await sleep(1000);
     }
   }
+
+  logger.info("Main loop exited (running=false)");
 }
 
 async function handleUpdate(update) {
@@ -288,11 +299,31 @@ async function handleSignupFlow(chatId, userId, text, state) {
 }
 
 // Graceful shutdown
-process.on("SIGINT", async () => {
-  logger.info("Shutting down...");
-  await redis.quit();
-  process.exit(0);
-});
+// Graceful shutdown helper used for SIGINT and SIGTERM
+let mainPromise = null;
+async function shutdown(signal) {
+  try {
+    logger.info(`${signal} received, shutting down gracefully...`);
+    // flip flag to stop accepting new work
+    running = false;
+
+    // wait a short while for the main loop to finish current job
+    if (mainPromise) {
+      await Promise.race([mainPromise, sleep(5000)]);
+    }
+
+    logger.info("Closing Redis connection...");
+    await redis.quit();
+    logger.info("Shutdown complete, exiting");
+    process.exit(0);
+  } catch (err) {
+    logger.error("Error during shutdown", err);
+    process.exit(1);
+  }
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 process.on("unhandledRejection", (reason) => {
   logger.error("Unhandled rejection", reason);
