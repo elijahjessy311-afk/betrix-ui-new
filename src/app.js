@@ -29,6 +29,7 @@ import { TelegramService } from "./services/telegram.js";
 import { GeminiService } from "./services/gemini.js";
 import { LocalAIService } from "./services/local-ai.js";
 import { HuggingFaceService } from "./services/huggingface.js";
+import { AzureAIService } from "./services/azure-ai.js";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 
@@ -441,6 +442,42 @@ app.get("/admin/ai-health", async (req, res) => {
   }
 });
 
+// Admin-only raw Gemini debug endpoint - test Gemini API directly and log full response
+app.post("/admin/gemini-debug", authenticateAdmin, async (req, res) => {
+  try {
+    const prompt = req.body?.prompt || "What is artificial intelligence?";
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    if (!apiKey) {
+      return res.status(400).json(formatResponse(false, null, "GEMINI_API_KEY not set in environment"));
+    }
+
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
+    });
+
+    const text = result.response?.text?.() || "";
+    const status = result.response?.candidates?.[0]?.finishReason || "unknown";
+    
+    return res.json(formatResponse(true, {
+      apiKeyProvided: !!apiKey,
+      prompt,
+      responseText: text,
+      responseLength: text.length,
+      finishReason: status,
+      fullResponse: JSON.stringify(result.response)
+    }, "Gemini debug"));
+  } catch (err) {
+    log('ERROR', 'GEMINI-DEBUG', 'Raw Gemini test failed', { err: err?.message || String(err) });
+    return res.status(500).json(formatResponse(false, { error: err?.message || String(err) }, 'Gemini debug failed'));
+  }
+});
+
 // Admin-only AI test endpoint - runs a short prompt through the composite chain and returns provider+response
 app.post("/admin/ai-test", authenticateAdmin, async (req, res) => {
   try {
@@ -449,6 +486,12 @@ app.post("/admin/ai-test", authenticateAdmin, async (req, res) => {
 
     // Build same composite chain locally in web process for testing (does not affect worker)
     const geminiS = new GeminiService(process.env.GEMINI_API_KEY);
+    const azureS = new AzureAIService(
+      process.env.AZURE_AI_ENDPOINT || process.env.AZURE_ENDPOINT,
+      process.env.AZURE_AI_KEY || process.env.AZURE_KEY,
+      process.env.AZURE_AI_DEPLOYMENT || process.env.AZURE_DEPLOYMENT,
+      process.env.AZURE_API_VERSION
+    );
     const hfModelsRaw = process.env.HUGGINGFACE_MODELS || process.env.HUGGINGFACE_MODEL || null;
     const hf = new HuggingFaceService(hfModelsRaw, process.env.HUGGINGFACE_TOKEN);
     const local = new LocalAIService();
@@ -460,6 +503,16 @@ app.post("/admin/ai-test", authenticateAdmin, async (req, res) => {
         return res.json(formatResponse(true, { provider: 'gemini', model: null, response: out }, 'AI test'));
       } catch (err) {
         log('WARN', 'AI-TEST', 'Gemini test failed, falling back', { err: err?.message || String(err) });
+      }
+    }
+
+    // Try Azure
+    if (azureS && azureS.isHealthy()) {
+      try {
+        const out = await azureS.chat(prompt, {});
+        return res.json(formatResponse(true, { provider: 'azure', model: azureS.lastUsed || null, response: out }, 'AI test'));
+      } catch (err) {
+        log('WARN', 'AI-TEST', 'Azure test failed, falling back', { err: err?.message || String(err) });
       }
     }
 
