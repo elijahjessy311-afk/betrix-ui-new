@@ -461,48 +461,6 @@ console.log("[UTILS] ✓ randInt()  random integer - worker.js:454");
  * @param {number} retries - Number of retry attempts
  * @returns {object} Parsed JSON response
  */
-async function safeFetch(url, options = {}, label = "", retries = 2) {
-  console.log(`[FETCH] Attempting to fetch from: ${label || url.substring(0, 60)}... - worker.js:466`);
-  
-  let lastError = null;
-  
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      console.log(`[FETCH] Attempt ${attempt + 1}/${retries + 1} - worker.js:472`);
-      
-      const response = await fetch(url, {
-        ...options,
-        timeout: 15000
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const text = await response.text();
-      const data = text ? JSON.parse(text) : {};
-      
-      console.log(`[FETCH] ✅ Success: ${label} - worker.js:486`);
-      return data;
-      
-    } catch (error) {
-      lastError = error;
-      console.warn(`[FETCH] ⚠️  Attempt ${attempt + 1} failed: ${error.message} - worker.js:491`);
-      
-      if (attempt < retries) {
-        const waitTime = 500 * Math.pow(2, attempt);
-        console.log(`[FETCH] Waiting ${waitTime}ms before retry... - worker.js:495`);
-        await sleep(waitTime);
-      }
-    }
-  }
-  
-  console.error(`[FETCH] ❌ All ${retries + 1} attempts failed: ${label} - worker.js:501`);
-  throw lastError || new Error("Fetch failed after retries");
-}
-console.log("[UTILS] ✓ safeFetch()  HTTP with retries - worker.js:504");
-
-/**
  * Text chunking for Telegram message splitting
  * Telegram has 4096 character limit per message
  * @param {string} text - Text to chunk
