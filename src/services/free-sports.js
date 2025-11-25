@@ -5,7 +5,7 @@
  */
 
 import fetch from 'node-fetch';
-import cheerio from 'cheerio';
+import { load as loadCheerio } from 'cheerio';
 import { Logger } from '../utils/logger.js';
 
 const logger = new Logger('FreeSports');
@@ -91,7 +91,7 @@ class FreeSportsService {
       const html = j?.parse?.text?.['*'];
       if (!html) return null;
 
-      const $ = cheerio.load(html);
+      const $ = loadCheerio(html);
 
       // Look for the first table that looks like a standings table
       const tables = $('table.wikitable, table.sortable');
