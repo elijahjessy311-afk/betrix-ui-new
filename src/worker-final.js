@@ -65,7 +65,7 @@ const azure = new AzureAIService(
   process.env.AZURE_AI_DEPLOYMENT || process.env.AZURE_DEPLOYMENT || (CONFIG.AZURE && CONFIG.AZURE.DEPLOYMENT),
   process.env.AZURE_API_VERSION || (CONFIG.AZURE && CONFIG.AZURE.API_VERSION) || '2023-05-15'
 );
-const freeSports = new FreeSportsService();
+const freeSports = new FreeSportsService(redis);
 
 // Composite AI wrapper: try Gemini per-request, fall back to LocalAI on errors.
 const ai = {
@@ -306,6 +306,8 @@ async function handleCommand(chatId, userId, cmd, args, fullText) {
       "/about": () => basicHandlers.about(chatId),
       "/live": () => basicHandlers.live(chatId, userId),
       "/standings": () => basicHandlers.standings(chatId, args[0]),
+      "/league": () => basicHandlers.league(chatId, args.join(" ")),
+      "/predict": () => basicHandlers.predict(chatId, args.join(" ")),
       "/odds": () => basicHandlers.odds(chatId, args[0]),
       "/tips": () => basicHandlers.tips(chatId),
       "/pricing": () => basicHandlers.pricing(chatId),

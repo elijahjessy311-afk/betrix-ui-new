@@ -213,6 +213,87 @@ class BotHandlers {
     }
   }
 
+  // ===== LEAGUE SUMMARY =====
+  async league(chatId, leagueName) {
+    if (!leagueName) {
+      return this.telegram.sendMessage(chatId, `Usage: /league [league name]\nExample: /league Premier League`);
+    }
+
+    try {
+      if (this.freeSports) {
+        const guess = await this.freeSports.searchWiki(leagueName);
+        if (guess) {
+          const summary = await this.freeSports.getLeagueSummary(guess);
+          if (summary) {
+            const text = `📘 <b>${summary.title}</b>\n\n${summary.extract.substring(0, 800)}\n\nRead more: ${summary.url}`;
+            return this.telegram.sendMessage(chatId, text);
+          }
+        }
+      }
+
+      const msg = await this.gemini.chat(`Provide a short summary for the league: ${leagueName}`, {});
+      return this.telegram.sendMessage(chatId, `📘 <b>${leagueName}</b>\n\n${msg}`);
+    } catch (err) {
+      logger.error('League error', err);
+      return this.telegram.sendMessage(chatId, `❌ Unable to fetch league info right now.`);
+    }
+  }
+
+  // ===== SIMPLE PREDICT =====
+  async predict(chatId, query) {
+    if (!query) {
+      return this.telegram.sendMessage(chatId, `Usage: /predict Home vs Away [oddsHome] \nExample: /predict Arsenal vs Liverpool 1.95`);
+    }
+
+    try {
+      // Parse 'Team A vs Team B [odds]'
+      const parts = query.split(/vs|v/gi).map(s => s.trim());
+      if (parts.length < 2) return this.telegram.sendMessage(chatId, `Please use format: Home vs Away`);
+      const home = parts[0].replace(/\s+$/,'');
+      const awayAndOdds = parts[1].split(/\s+/).filter(Boolean);
+      const away = awayAndOdds[0];
+      const maybeOdds = awayAndOdds[1] ? Number(awayAndOdds[1]) : null;
+
+      // Try to get standings-derived points per game
+      let homePtsPerGame = null; let awayPtsPerGame = null;
+      if (this.freeSports) {
+        const hTitle = await this.freeSports.searchWiki(home);
+        const aTitle = await this.freeSports.searchWiki(away);
+        if (hTitle) {
+          const hStand = await this.freeSports.getStandings(hTitle, 40);
+          if (hStand) {
+            const found = hStand.find(r => (r.team || r.raw?.[1] || '').toLowerCase().includes(home.toLowerCase()));
+            if (found && found.played && found.points) {
+              homePtsPerGame = Number(found.points) / Math.max(1, Number(found.played));
+            }
+          }
+        }
+        if (aTitle) {
+          const aStand = await this.freeSports.getStandings(aTitle, 40);
+          if (aStand) {
+            const found = aStand.find(r => (r.team || r.raw?.[1] || '').toLowerCase().includes(away.toLowerCase()));
+            if (found && found.played && found.points) {
+              awayPtsPerGame = Number(found.points) / Math.max(1, Number(found.played));
+            }
+          }
+        }
+      }
+
+      const analytics = await import('./services/analytics.js');
+      const pred = await analytics.predictMatch({ home, away, homeOdds: maybeOdds, homePtsPerGame, awayPtsPerGame });
+      if (!pred) return this.telegram.sendMessage(chatId, `❌ Unable to produce prediction right now.`);
+
+      const text = `🔮 <b>Prediction</b>\n${pred.home} vs ${pred.away}\nModel P(Home): ${pred.modelProbHome}\n` +
+        (pred.impliedHome ? `Implied P(Home): ${pred.impliedHome}\nEdge: ${pred.edge}\n` : '') +
+        `Kelly: ${pred.kellyFraction}\nRecommendation: ${pred.recommended}`;
+
+      return this.telegram.sendMessage(chatId, text);
+    } catch (err) {
+      logger.error('Predict error', err);
+      return this.telegram.sendMessage(chatId, `❌ Prediction failed. Try again later.`);
+    }
+  }
+
   // ===== TIPS & STRATEGY =====
 
   async tips(chatId) {

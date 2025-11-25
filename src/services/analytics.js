@@ -1,4 +1,63 @@
 /**
+ * Lightweight analytics for betting: implied probability, Kelly fraction, simple model
+ */
+import { Logger } from '../utils/logger.js';
+
+const logger = new Logger('Analytics');
+
+function decimalToImplied(odd) {
+  // odd can be string or number (decimal odds)
+  const o = Number(String(odd).replace(/[^0-9.]/g, ''));
+  if (!o || o <= 1) return null;
+  return 1 / o;
+}
+
+function kellyFraction(p, b) {
+  // p = probability (0..1), b = decimal-1 (edge units)
+  if (b <= 0) return 0;
+  const q = 1 - p;
+  const f = (p * (b + 1) - 1) / b; // fractional Kelly
+  return Math.max(0, Math.min(1, f || 0));
+}
+
+// Simple estimator combining standings points and basic home advantage
+function simpleModelProbability(homePointsPerGame, awayPointsPerGame, homeAdv = 0.06) {
+  // Convert to relative strength
+  const h = homePointsPerGame || 0.5;
+  const a = awayPointsPerGame || 0.5;
+  const raw = (h * (1 + homeAdv)) / (h * (1 + homeAdv) + a);
+  return Math.max(0.01, Math.min(0.99, raw));
+}
+
+async function predictMatch({ home, away, homeOdds = null, awayOdds = null, homePtsPerGame = null, awayPtsPerGame = null }) {
+  try {
+    // Estimate model probability using points per game if available
+    const pHome = simpleModelProbability(homePtsPerGame, awayPtsPerGame);
+
+    // If odds provided, compute implied
+    const impliedHome = homeOdds ? decimalToImplied(homeOdds) : null;
+    const edge = impliedHome ? pHome - impliedHome : null;
+
+    const b = homeOdds ? Number(homeOdds) - 1 : null;
+    const kelly = (edge && b) ? kellyFraction(pHome, b) : 0;
+
+    return {
+      home,
+      away,
+      modelProbHome: Number((pHome).toFixed(3)),
+      impliedHome: impliedHome ? Number(impliedHome.toFixed(3)) : null,
+      edge: edge ? Number(edge.toFixed(3)) : null,
+      kellyFraction: Number(kelly.toFixed(3)),
+      recommended: kelly > 0.02 ? `Bet ${Math.round(kelly * 100)}% of bankroll on ${home}` : 'No clear value bet',
+    };
+  } catch (err) {
+    logger.warn('predictMatch failed', err?.message || String(err));
+    return null;
+  }
+}
+
+export { decimalToImplied, kellyFraction, simpleModelProbability, predictMatch };
+/**
  * Analytics & Performance Tracking
  * Tracks predictions, user behavior, system performance
  */

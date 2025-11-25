@@ -11,17 +11,32 @@ import { Logger } from '../utils/logger.js';
 const logger = new Logger('FreeSports');
 
 class FreeSportsService {
-  constructor() {}
+  constructor(redis = null) {
+    this.redis = redis;
+    this.cacheTTL = 60 * 60 * 24; // 1 day
+  }
 
   // Search Wikipedia for a matching page title for a league name
   async searchWiki(title) {
     try {
+      if (!title) return null;
+      const key = `free:wikidata:search:${title.toLowerCase()}`;
+      if (this.redis) {
+        const cached = await this.redis.get(key).catch(() => null);
+        if (cached) return cached;
+      }
+
       const q = encodeURIComponent(title);
       const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${q}&format=json&srlimit=5`;
       const res = await fetch(url, { headers: { 'User-Agent': 'BETRIX/1.0 (bot)' } });
       const j = await res.json();
       const first = j?.query?.search?.[0];
-      return first?.title || null;
+      const result = first?.title || null;
+      if (result && this.redis) {
+        await this.redis.set(key, result).catch(() => {});
+        await this.redis.expire(key, this.cacheTTL).catch(() => {});
+      }
+      return result;
     } catch (err) {
       logger.warn('Wiki search failed', err?.message || String(err));
       return null;
@@ -32,16 +47,27 @@ class FreeSportsService {
   async getLeagueSummary(title) {
     try {
       if (!title) return null;
+      const key = `free:wikidata:summary:${title.toLowerCase()}`;
+      if (this.redis) {
+        const cached = await this.redis.get(key).catch(() => null);
+        if (cached) return JSON.parse(cached);
+      }
+
       const encoded = encodeURIComponent(title.replace(/ /g, '_'));
       const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`;
       const res = await fetch(url, { headers: { 'User-Agent': 'BETRIX/1.0 (bot)' } });
       if (!res.ok) return null;
       const j = await res.json();
-      return {
+      const out = {
         title: j.title,
         extract: j.extract,
         url: j.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encoded}`,
       };
+      if (this.redis) {
+        await this.redis.set(key, JSON.stringify(out)).catch(() => {});
+        await this.redis.expire(key, this.cacheTTL).catch(() => {});
+      }
+      return out;
     } catch (err) {
       logger.warn('getLeagueSummary failed', err?.message || String(err));
       return null;
@@ -52,6 +78,12 @@ class FreeSportsService {
   async getStandings(pageTitle, maxRows = 10) {
     try {
       if (!pageTitle) return null;
+      const key = `free:wikidata:standings:${pageTitle.toLowerCase()}`;
+      if (this.redis) {
+        const cached = await this.redis.get(key).catch(() => null);
+        if (cached) return JSON.parse(cached);
+      }
+
       const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(pageTitle)}&prop=text&format=json`;
       const res = await fetch(url, { headers: { 'User-Agent': 'BETRIX/1.0 (bot)' } });
       if (!res.ok) return null;
@@ -113,7 +145,12 @@ class FreeSportsService {
           rows.push(entry);
         });
 
-      return rows.slice(0, maxRows);
+      const out = rows.slice(0, maxRows);
+      if (this.redis) {
+        await this.redis.set(key, JSON.stringify(out)).catch(() => {});
+        await this.redis.expire(key, this.cacheTTL).catch(() => {});
+      }
+      return out;
     } catch (err) {
       logger.warn('getStandings failed', err?.message || String(err));
       return null;
