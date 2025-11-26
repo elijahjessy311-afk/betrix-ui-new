@@ -15,7 +15,6 @@
 import express from "express";
 import bodyParser from "body-parser";
 import { getRedis } from "./lib/redis-factory.js";
-import Redis from "ioredis";
 import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -220,11 +219,16 @@ const handleWebSocketMessage = (ws, data, clientId) => {
 // because once subscribed, Redis doesn't allow regular commands on that connection
 // ============================================================================
 try {
-  // Create a SEPARATE Redis instance dedicated to pub/sub
-  // Do NOT reuse the singleton getRedis() since it's used for regular commands
-  const sub = process.env.USE_MOCK_REDIS === '1' || !process.env.REDIS_URL
-    ? { subscribe: async () => {}, on: () => {} }  // Mock pub/sub for local testing
-    : new Redis(process.env.REDIS_URL);  // Real ioredis instance for production
+  let sub;
+  const useMock = process.env.USE_MOCK_REDIS === '1' || !process.env.REDIS_URL;
+  if (useMock) {
+    // MockRedis: create a mock subscriber (doesn't need separate instance)
+    sub = new (await import('./lib/redis-factory.js')).MockRedis();
+  } else {
+    // Real Redis: create a SEPARATE ioredis instance (not the singleton)
+    const Redis = (await import('ioredis')).default;
+    sub = new Redis(process.env.REDIS_URL);
+  }
 
   sub.subscribe('prefetch:updates', 'prefetch:error').then(() => {
     log('INFO', 'PREFETCH', 'Subscribed to prefetch channels');
