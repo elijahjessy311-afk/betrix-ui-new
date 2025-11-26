@@ -4,6 +4,7 @@
  */
 
 import { Logger } from '../utils/logger.js';
+import * as paypal from '@paypal/checkout-server-sdk';
 
 const logger = new Logger('PaymentRouter');
 
@@ -229,6 +230,26 @@ export async function createPaymentOrder(redis, userId, tier, paymentMethod, use
       }
     }
 
+    // For PayPal, create a server-side order and capture approval URL
+    if (paymentMethod === 'PAYPAL') {
+      try {
+        const paypalResult = await createPayPalOrder(orderData);
+        if (paypalResult && paypalResult.id) {
+          orderData.providerRef = paypalResult.id;
+          orderData.metadata = orderData.metadata || {};
+          orderData.metadata.checkoutUrl = paypalResult.approvalUrl;
+          orderData.instructions = {
+            method: 'paypal',
+            checkoutUrl: paypalResult.approvalUrl,
+            amount: orderData.totalAmount,
+            description: 'Pay with PayPal'
+          };
+        }
+      } catch (e) {
+        logger.warn('Failed to create PayPal order', e);
+      }
+    }
+
     // Store order in Redis (15 min TTL)
     await redis.setex(`payment:order:${orderId}`, 900, JSON.stringify(orderData));
 
@@ -288,6 +309,64 @@ export async function getPaymentInstructions(redis, orderId, paymentMethod) {
     return instructions[paymentMethod] || null;
   } catch (err) {
     logger.error('Failed to get payment instructions', err);
+    throw err;
+  }
+}
+
+// -------------------------
+// PayPal helpers
+// -------------------------
+function paypalClient() {
+  const clientId = process.env.PAYPAL_CLIENT_ID;
+  const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
+  const mode = (process.env.PAYPAL_MODE || 'sandbox').toLowerCase();
+
+  if (!clientId || !clientSecret) {
+    throw new Error('PayPal credentials not configured');
+  }
+
+  const env = mode === 'live'
+    ? new paypal.core.LiveEnvironment(clientId, clientSecret)
+    : new paypal.core.SandboxEnvironment(clientId, clientSecret);
+
+  return new paypal.core.PayPalHttpClient(env);
+}
+
+async function createPayPalOrder(orderData) {
+  try {
+    const client = paypalClient();
+    const request = new paypal.orders.OrdersCreateRequest();
+    request.prefer('return=representation');
+
+    // Use currency from orderData or default to USD
+    const currency = orderData.currency || 'USD';
+    const value = String(Number(orderData.totalAmount).toFixed(2));
+
+    request.requestBody({
+      intent: 'CAPTURE',
+      purchase_units: [
+        {
+          reference_id: orderData.orderId,
+          amount: {
+            currency_code: currency,
+            value: value
+          },
+          description: `BETRIX ${orderData.tier} subscription`
+        }
+      ],
+      application_context: {
+        brand_name: 'BETRIX',
+        return_url: process.env.PAYPAL_RETURN_URL || `${process.env.PUBLIC_URL || 'https://betrix.app'}/pay/complete`,
+        cancel_url: process.env.PAYPAL_CANCEL_URL || `${process.env.PUBLIC_URL || 'https://betrix.app'}/pay/cancel`
+      }
+    });
+
+    const response = await client.execute(request);
+    const result = response.result || {};
+    const approveLink = (result.links || []).find(l => l.rel === 'approve');
+    return { id: result.id, approvalUrl: approveLink ? approveLink.href : null };
+  } catch (err) {
+    logger.error('createPayPalOrder failed', err);
     throw err;
   }
 }

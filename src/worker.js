@@ -2398,6 +2398,56 @@ app.get("/analytics", async (req, res) => {
 
 console.log("[EXPRESS] ✓ GET /analytics configured\n - worker.js:2354");
 
+// ---------------------------------------------------------------------------
+// PayPal return/cancel handlers
+// ---------------------------------------------------------------------------
+app.get('/pay/complete', async (req, res) => {
+  console.log('[EXPRESS] GET /pay/complete - PayPal return handler');
+  const token = req.query.token || req.query.orderID || req.query.orderId;
+  if (!token) return res.status(400).send('Missing PayPal token');
+
+  try {
+    const mode = (process.env.PAYPAL_MODE || 'sandbox').toLowerCase();
+    const clientId = process.env.PAYPAL_CLIENT_ID;
+    const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
+    const env = mode === 'live'
+      ? new paypalSdk.core.LiveEnvironment(clientId, clientSecret)
+      : new paypalSdk.core.SandboxEnvironment(clientId, clientSecret);
+    const client = new paypalSdk.core.PayPalHttpClient(env);
+
+    const captureReq = new paypalSdk.orders.OrdersCaptureRequest(token);
+    captureReq.requestBody({});
+    const captureResp = await client.execute(captureReq);
+
+    // Extract a capture/transaction id
+    const captureId = (captureResp.result.purchase_units && captureResp.result.purchase_units[0] && captureResp.result.purchase_units[0].payments && captureResp.result.purchase_units[0].payments.captures && captureResp.result.purchase_units[0].payments.captures[0] && captureResp.result.purchase_units[0].payments.captures[0].id) || captureResp.result.id;
+
+    // Map PayPal order id -> internal order id via Redis mapping
+    const IORedis = Redis;
+    const redisClient = new IORedis(process.env.REDIS_URL);
+    const orderId = await redisClient.get(`payment:by_provider_ref:PAYPAL:${token}`);
+
+    if (!orderId) {
+      console.warn('[PAYPAL] Order mapping not found for token', token);
+      return res.send(`Payment captured (id=${captureId}) — but order mapping not found. Contact support.`);
+    }
+
+    // Activate subscription using payment-router helper
+    const paymentRouter = await import('./handlers/payment-router.js');
+    await paymentRouter.verifyAndActivatePayment(redisClient, orderId, captureId);
+
+    return res.send('🎉 Payment successful — subscription activated. You can return to the bot.');
+  } catch (err) {
+    console.error('[PAYPAL] /pay/complete error', err);
+    return res.status(500).send('Error capturing PayPal order');
+  }
+});
+
+app.get('/pay/cancel', (req, res) => {
+  console.log('[EXPRESS] GET /pay/cancel - PayPal cancel handler');
+  return res.send('Payment cancelled. You can try again from the bot.');
+});
+
 // ============================================================================
 // STARTUP & GRACEFUL SHUTDOWN (100+ LINES)
 // ============================================================================

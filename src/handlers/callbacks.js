@@ -246,48 +246,32 @@ async function handlePaymentCallback(data, chatId, userId, redis, services) {
         instructionsText = instructions && typeof instructions === 'string' ? instructions : '_Unable to build payment instructions_';
       }
 
-    // Build comprehensive confirmation screen
-    let confirmText = `✅ *Payment Order Created*
 
-📋 *Order Details:*
-Order ID: \`${order.orderId}\`
-User ID: \`${userId}\`
-Tier: *${getTierDisplayName(tier)}*
-Amount: *KES ${getTierAmount(tier)}*
-Status: ⏳ Pending Payment
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-💳 *Payment Method: ${getMethodName(method)}*
 
-${instructions.text}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⏱️ *Next Steps:*
-1️⃣ Send payment using the details above
-2️⃣ Wait for confirmation (usually instant)
-3️⃣ Click "✅ Confirm Payment Sent" when done
 
-❗ *Important:*
-• Screenshot your payment confirmation for support
-• Payment may take 5-10 minutes to appear
-• Check "Check Status" to verify payment
 
-*Questions?* Contact support@betrix.app`;
+      // Build comprehensive confirmation screen
+      let confirmText = `✅ *Payment Order Created*\n\n📋 *Order Details:*\nOrder ID: \`${order.orderId}\`\nUser ID: \`${userId}\`\nTier: *${getTierDisplayName(tier)}*\nAmount: *KES ${getTierAmount(tier)}*\nStatus: ⏳ Pending Payment\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💳 *Payment Method: ${getMethodName(method)}*\n\n${instructionsText}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n⏱️ *Next Steps:*\n1️⃣ Send payment using the details above\n2️⃣ Wait for confirmation (usually instant)\n3️⃣ Click "✅ Confirm Payment Sent" when done\n\n❗ *Important:*\n• Screenshot your payment confirmation for support\n• Payment may take 5-10 minutes to appear\n• Check "Check Status" to verify payment\n\n*Questions?* Contact support@betrix.app`;
 
     // Build keyboard with confirmation + status check
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '✅ Confirm Payment Sent', callback_data: `verify_${order.orderId}` },
-          { text: '🔄 Check Status', callback_data: `status_${order.orderId}` }
-        ],
-        [
-          { text: '❌ Cancel Order', callback_data: 'menu_vvip' }
-        ]
-      ]
-    };
+    // If PayPal checkout URL is available, show a direct Pay button linking to PayPal
+    const keyboard = { inline_keyboard: [] };
+    if (instructions && instructions.checkoutUrl) {
+      keyboard.inline_keyboard.push([
+        { text: '💳 Pay with PayPal', url: instructions.checkoutUrl }
+      ]);
+    }
+    keyboard.inline_keyboard.push([
+      { text: '✅ Confirm Payment Sent', callback_data: `verify_${order.orderId}` },
+      { text: '🔄 Check Status', callback_data: `status_${order.orderId}` }
+    ]);
+    keyboard.inline_keyboard.push([
+      { text: '❌ Cancel Order', callback_data: 'menu_vvip' }
+    ]);
 
     return {
       method: 'editMessageText',
