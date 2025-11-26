@@ -59,10 +59,19 @@ async function checkPayPal() {
       body: 'grant_type=client_credentials'
     }, 7000);
     if (!res) return { ok: false, reason: 'no response' };
-    const json = await res.json();
-    return { ok: !!json.access_token, info: json.access_token ? 'token_acquired' : JSON.stringify(json) };
+    const text = await res.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return { ok: false, reason: `invalid JSON: ${text.substring(0, 100)}` };
+    }
+    if (json.error) {
+      return { ok: false, reason: `${json.error} - ${json.error_description || ''}`.trim() };
+    }
+    return { ok: !!json.access_token, info: json.access_token ? 'token_acquired' : `no_token: ${JSON.stringify(json).substring(0, 100)}` };
   } catch (err) {
-    return { ok: false, reason: err.message };
+    return { ok: false, reason: err.message || err.toString() };
   }
 }
 
@@ -87,10 +96,20 @@ async function checkAllSports() {
   if (!key) return { ok: false, reason: 'ALLSPORTS_API/RAPIDAPI_KEY missing' };
   try {
     const url = `https://${host}/`;
-    const res = await fetchWithTimeout(url, { headers: { 'x-rapidapi-key': key, 'x-rapidapi-host': host } }, 7000);
-    return { ok: res && (res.status === 200 || res.status === 404 || res.status === 403), status: res ? res.status : 'no_resp' };
+    const res = await fetchWithTimeout(url, { 
+      headers: { 
+        'x-rapidapi-key': key, 
+        'x-rapidapi-host': host,
+        'User-Agent': 'BetrixBot/1.0'
+      } 
+    }, 7000);
+    if (!res) return { ok: false, reason: 'no response' };
+    // AllSports may return 403 if key is wrong, but 404/200 if reachable
+    const isOk = res.status === 200 || res.status === 404 || res.status === 403;
+    const reason = isOk ? undefined : `HTTP ${res.status}`;
+    return { ok: isOk, status: res.status, reason };
   } catch (err) {
-    return { ok: false, reason: err.message };
+    return { ok: false, reason: err.message || err.toString() };
   }
 }
 
