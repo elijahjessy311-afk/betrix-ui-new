@@ -727,7 +727,7 @@ async function handlePlaceBet(data, chatId, userId, redis) {
     // remove betslip
     await redis.del(`betslip:${betId}`);
 
-    const text = '✅ Bet placed!\n\nFixture: *' + bet.fixtureText + '*\nStake: KES ' + bet.stake + '\nSelection: *' + bet.selection + '*\nTransaction: `' + txId + '`\n\nGood luck!';
+    const text = `✅ Bet placed!\n\nFixture: *${bet.fixtureText}*\nStake: KES ${bet.stake}\nSelection: *${bet.selection}*\nTransaction: \\`${txId}\\`\n\nGood luck!`;
 
     return {
       method: 'sendMessage',
@@ -1101,11 +1101,11 @@ async function handlePaymentMethodSelection(data, chatId, userId, redis, service
       }
 
       // Additional helper fields
-      if (instructions.tillNumber) instrText += 'Till: *' + instructions.tillNumber + '*\n';
-      if (instructions.reference) instrText += 'Reference: `' + instructions.reference + '`\n';
-      if (instructions.checkoutUrl) instrText += 'Open the payment link to continue.';
+      if (instructions.tillNumber) instrText += `Till: *${instructions.tillNumber}*\n`;
+      if (instructions.reference) instrText += `Reference: \\`${instructions.reference}\\`\n`;
+      if (instructions.checkoutUrl) instrText += `Open the payment link to continue.`;
     } else {
-      instrText = 'Please follow the provider instructions to complete payment for order ' + order.orderId + '.';
+      instrText = `Please follow the provider instructions to complete payment for order ${order.orderId}.`;
     }
 
     // Build buttons: provider-specific CTAs and common verification

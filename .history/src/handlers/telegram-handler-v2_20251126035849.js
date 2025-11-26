@@ -727,7 +727,7 @@ async function handlePlaceBet(data, chatId, userId, redis) {
     // remove betslip
     await redis.del(`betslip:${betId}`);
 
-    const text = '✅ Bet placed!\n\nFixture: *' + bet.fixtureText + '*\nStake: KES ' + bet.stake + '\nSelection: *' + bet.selection + '*\nTransaction: `' + txId + '`\n\nGood luck!';
+    const text = `✅ Bet placed!\n\nFixture: *${bet.fixtureText}*\nStake: KES ${bet.stake}\nSelection: *${bet.selection}*\nTransaction: \\`${txId}\\`\n\nGood luck!`;
 
     return {
       method: 'sendMessage',
@@ -739,63 +739,6 @@ async function handlePlaceBet(data, chatId, userId, redis) {
   } catch (err) {
     logger.error('handlePlaceBet error', err);
     return { method: 'sendMessage', chat_id: chatId, text: '❌ Failed to place bet.', parse_mode: 'Markdown' };
-  }
-}
-
-// Present stake options to user
-async function handleEditBet(data, chatId, userId, redis) {
-  try {
-    const betId = data.replace('edit_bet_', '');
-    const raw = await redis.get(`betslip:${betId}`);
-    if (!raw) return { method: 'sendMessage', chat_id: chatId, text: '⚠️ Betslip not found or expired.', parse_mode: 'Markdown' };
-    const bet = JSON.parse(raw);
-
-    const keyboard = [
-      [ { text: 'KES 50', callback_data: `set_bet_${bet.id}_50` }, { text: 'KES 100', callback_data: `set_bet_${bet.id}_100` } ],
-      [ { text: 'KES 200', callback_data: `set_bet_${bet.id}_200` }, { text: 'KES 500', callback_data: `set_bet_${bet.id}_500` } ],
-      [ { text: '🔙 Cancel', callback_data: `bet_fixture_${bet.fixtureId}` } ]
-    ];
-
-    return {
-      method: 'editMessageText',
-      chat_id: chatId,
-      message_id: undefined,
-      text: `✏️ *Edit Stake*\n\nCurrent stake: KES ${bet.stake}\nChoose a new stake:`,
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: keyboard }
-    };
-  } catch (err) {
-    logger.error('handleEditBet error', err);
-    return { method: 'sendMessage', chat_id: chatId, text: '❌ Error editing bet.', parse_mode: 'Markdown' };
-  }
-}
-
-// Handle stake selection and update betslip
-async function handleSetBetStake(data, chatId, userId, redis) {
-  try {
-    // format set_bet_{betId}_{amount}
-    const parts = data.split('_');
-    const betId = parts[2];
-    const amount = Number(parts[3] || 0);
-    if (!betId || !amount) return { method: 'sendMessage', chat_id: chatId, text: '⚠️ Invalid stake selection.', parse_mode: 'Markdown' };
-
-    const raw = await redis.get(`betslip:${betId}`);
-    if (!raw) return { method: 'sendMessage', chat_id: chatId, text: '⚠️ Betslip expired or not found.', parse_mode: 'Markdown' };
-    const bet = JSON.parse(raw);
-    bet.stake = amount;
-    await redis.setex(`betslip:${betId}`, 3600, JSON.stringify(bet));
-
-    return {
-      method: 'editMessageText',
-      chat_id: chatId,
-      message_id: undefined,
-      text: `🧾 *Betslip Updated*\n\nFixture: *${bet.fixtureText}*\nNew stake: KES ${bet.stake}\n\nTap to place the bet.`,
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: [[{ text: '✅ Place Bet', callback_data: `place_bet_${bet.id}` }, { text: '🔙 Back', callback_data: 'menu_live' }]] }
-    };
-  } catch (err) {
-    logger.error('handleSetBetStake error', err);
-    return { method: 'sendMessage', chat_id: chatId, text: '❌ Error setting stake.', parse_mode: 'Markdown' };
   }
 }
 
@@ -1101,11 +1044,11 @@ async function handlePaymentMethodSelection(data, chatId, userId, redis, service
       }
 
       // Additional helper fields
-      if (instructions.tillNumber) instrText += 'Till: *' + instructions.tillNumber + '*\n';
-      if (instructions.reference) instrText += 'Reference: `' + instructions.reference + '`\n';
-      if (instructions.checkoutUrl) instrText += 'Open the payment link to continue.';
+      if (instructions.tillNumber) instrText += `Till: *${instructions.tillNumber}*\n`;
+      if (instructions.reference) instrText += `Reference: \\`${instructions.reference}\\`\n`;
+      if (instructions.checkoutUrl) instrText += `Open the payment link to continue.`;
     } else {
-      instrText = 'Please follow the provider instructions to complete payment for order ' + order.orderId + '.';
+      instrText = `Please follow the provider instructions to complete payment for order ${order.orderId}.`;
     }
 
     // Build buttons: provider-specific CTAs and common verification
