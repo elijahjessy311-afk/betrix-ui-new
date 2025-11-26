@@ -121,6 +121,23 @@ function normalizeAllSportsMatch(it) {
   }
 }
 
+function normalizeSportsDataEvent(it) {
+  // SportsData-like event/fixture -> normalize to common shape
+  try {
+    const home = it.homeTeam?.name || it.homeTeamName || it.home?.name || it.home || 'Home';
+    const away = it.awayTeam?.name || it.awayTeamName || it.away?.name || it.away || 'Away';
+    const score = (it.homeScore != null && it.awayScore != null) ? `${it.homeScore}-${it.awayScore}` : (it.score ? it.score : null);
+    const time = it.status || it.matchTime || it.minute || null;
+    const homeOdds = it.odds?.home || it.homeOdds || '-';
+    const drawOdds = it.odds?.draw || it.drawOdds || '-';
+    const awayOdds = it.odds?.away || it.awayOdds || '-';
+    return { home, away, score, time, homeOdds, drawOdds, awayOdds };
+  } catch (e) {
+    return { home: 'Home', away: 'Away', score: null, time: null, homeOdds: '-', drawOdds: '-', awayOdds: '-' };
+  }
+}
+
+
 function normalizeStandingsOpenLiga(table) {
   // Convert OpenLiga standings rows into { name, played, won, drawn, lost, goalDiff, points }
   try {
@@ -309,7 +326,8 @@ async function handleLiveGames(chatId, userId, redis, services, query = {}) {
       if (!it) return { home: 'Home', away: 'Away', score: null, time: null };
       if (it.Team1 || it.MatchDateTime) return normalizeOpenLigaMatch(it);
       if (it.fixture || it.teams || it.league) return normalizeApiFootballFixture(it);
-      if (it.home_team || it.away_team || it.eventName) return normalizeAllSportsMatch(it);
+      if (it.homeTeam || it.homeTeamName || it.home_team || it.away_team || it.eventName) return normalizeAllSportsMatch(it);
+      if (it.homeScore !== undefined || it.homeTeam || it.awayTeam || it.matchId || it.score) return normalizeSportsDataEvent(it);
       return normalizeFootballDataFixture(it);
     }).slice(0, 5);
 
@@ -393,7 +411,8 @@ async function handleOdds(chatId, userId, redis, services, query = {}) {
     const matches = matchesRaw.map(m => {
       if (!m) return { home: 'Home', away: 'Away', homeOdds: '-', drawOdds: '-', awayOdds: '-' };
       if (m.fixture || m.teams || m.league) return normalizeApiFootballFixture(m);
-      if (m.home_team || m.away_team || m.eventName) return normalizeAllSportsMatch(m);
+      if (m.homeTeam || m.homeTeamName || m.home_team || m.away_team || m.eventName) return normalizeAllSportsMatch(m);
+      if (m.homeScore !== undefined || m.homeTeam || m.awayTeam || m.matchId || m.score) return normalizeSportsDataEvent(m);
       return normalizeFootballDataFixture(m);
     }).slice(0, 8);
 
