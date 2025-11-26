@@ -322,12 +322,32 @@ async function handleUpdate(update) {
     }
 
     if (update.callback_query) {
-      const { id: callbackId, from, data } = update.callback_query;
-      const userId = from.id;
-      const chatId = update.callback_query.message.chat.id;
+      const callbackQuery = update.callback_query;
+      const callbackId = callbackQuery.id;
+      const userId = callbackQuery.from?.id;
+      const chatId = callbackQuery.message?.chat?.id;
 
       await telegram.answerCallback(callbackId, "Processing...");
-      await handleCallback(chatId, userId, data);
+
+      try {
+        const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, cache };
+        const res = await v2Handler.handleCallbackQuery(callbackQuery, redis, services);
+        if (!res) return;
+
+        // Dispatch result objects returned by v2 handler
+        if (res.method === 'editMessageText') {
+          const messageId = res.message_id || callbackQuery.message?.message_id;
+          await telegram.editMessage(chatId, messageId, res.text || '', res.reply_markup || null);
+        } else if (res.method === 'sendMessage' || res.chat_id) {
+          const target = res.chat_id || chatId;
+          await telegram.sendMessage(target, res.text || '', { reply_markup: res.reply_markup, parse_mode: res.parse_mode || 'HTML' });
+        } else if (res.method === 'answerCallback') {
+          // Some handlers may request a callback answer
+          await telegram.answerCallback(callbackId, res.text || '', res.show_alert || false);
+        }
+      } catch (err) {
+        logger.error('Callback handling failed', err);
+      }
     }
   } catch (err) {
     logger.error("Update error", err);
