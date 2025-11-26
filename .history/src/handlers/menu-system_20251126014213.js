@@ -22,26 +22,28 @@ const TILL_NUMBER = process.env.MPESA_TILL || process.env.SAFARICOM_TILL_NUMBER 
 export const mainMenu = {
   text: `${BETRIX_HEADER}
 
-Welcome back! 👋 Choose an option below or ask naturally (e.g. "Top picks tonight").`,
+Welcome back! 👋 I'm BETRIX — here to help you find great bets, fast insights, and match-winning ideas.
 
-  // Modern compact grid: two-column primary actions, single-row utilities
+What would you like to do today?
+
+*Tip:* Try typing a natural question like "Who are the favorites tonight?" or press a button below to get started.`,
+  
   reply_markup: {
     inline_keyboard: [
       [
-        { text: '🔴 Live', callback_data: 'menu_live' },
-        { text: '📊 Odds', callback_data: 'menu_odds' }
+        { text: '⚽ Live Games', callback_data: 'menu_live' },
+        { text: '📊 Odds & Analysis', callback_data: 'menu_odds' }
       ],
       [
         { text: '🏆 Standings', callback_data: 'menu_standings' },
-        { text: '📰 News', callback_data: 'menu_news' }
+        { text: '📰 Latest News', callback_data: 'menu_news' }
       ],
       [
-        { text: '💎 Subscribe', callback_data: 'menu_vvip' },
-        { text: '👤 Profile', callback_data: 'menu_profile' }
+        { text: '💰 Subscribe to VVIP', callback_data: 'menu_vvip' },
+        { text: '👤 My Profile', callback_data: 'menu_profile' }
       ],
       [
-        { text: '❓ Help', callback_data: 'menu_help' },
-        { text: '⚙️ Settings', callback_data: 'menu_help' }
+        { text: '❓ Help', callback_data: 'menu_help' }
       ]
     ]
   }
@@ -84,17 +86,48 @@ export const sportsMenu = {
 export const subscriptionMenu = {
   text: `${BETRIX_HEADER}
 
-🎉 Unlock Premium — simple plans, instant access.
+*🎉 Unlock Premium Features with VVIP*
 
-Choose a plan below. Payment methods shown after selection.`,
+✨ *VVIP Benefits:*
+• 🤖 Unlimited AI analysis
+• 📈 Real-time odds & arbitrage alerts
+• 🎯 Advanced predictions (85%+ accuracy)
+• 📊 Historical data & trend analysis
+• 🔔 Custom notifications
+• 💳 No ads
 
-  // Compact subscription card layout
+💰 *Tier Pricing (KES):*
+┌────────────────────────────────┐
+│ Free        → Community access │
+│ Pro    → KES 899/month  📊      │
+│ VVIP   → KES 2,699/month ⭐    │ Most Popular
+│ Plus   → KES 8,999/month 💎    │ Premium+VIP
+└────────────────────────────────┘
+
+🏪 *Payment Methods Available:*
+${TILL_NUMBER ? `🏪 Safaricom Till #${TILL_NUMBER} - Instant (KES only)` : '🏪 Safaricom Till - Instant (KES)'}
+📱 M-Pesa STK - Push & confirm
+💳 PayPal - International cards
+₿ Binance Pay - Crypto options
+🏦 Bank Transfer - SWIFT (EUR/USD)
+
+*Choose Your Plan:*
+(Payment will be processed after selection)`,
+  
   reply_markup: {
     inline_keyboard: [
-      [ { text: '📊 Pro — KES 899/mo', callback_data: 'sub_pro' } ],
-      [ { text: '👑 VVIP — KES 2,699/mo', callback_data: 'sub_vvip' } ],
-      [ { text: '💎 PLUS — KES 8,999/mo', callback_data: 'sub_plus' } ],
-      [ { text: '🔙 Back', callback_data: 'menu_main' } ]
+      [
+        { text: '📊 Pro (KES 899)', callback_data: 'sub_pro' }
+      ],
+      [
+        { text: '👑 VVIP (KES 2,699) - POPULAR ⭐', callback_data: 'sub_vvip' }
+      ],
+      [
+        { text: '💎 BETRIX Plus (KES 8,999)', callback_data: 'sub_plus' }
+      ],
+      [
+        { text: '🔙 Back to Menu', callback_data: 'menu_main' }
+      ]
     ]
   }
 };

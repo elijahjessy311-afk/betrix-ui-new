@@ -22,26 +22,28 @@ const TILL_NUMBER = process.env.MPESA_TILL || process.env.SAFARICOM_TILL_NUMBER 
 export const mainMenu = {
   text: `${BETRIX_HEADER}
 
-Welcome back! 👋 Choose an option below or ask naturally (e.g. "Top picks tonight").`,
+Welcome back! 👋 I'm BETRIX — here to help you find great bets, fast insights, and match-winning ideas.
 
-  // Modern compact grid: two-column primary actions, single-row utilities
+What would you like to do today?
+
+*Tip:* Try typing a natural question like "Who are the favorites tonight?" or press a button below to get started.`,
+  
   reply_markup: {
     inline_keyboard: [
       [
-        { text: '🔴 Live', callback_data: 'menu_live' },
-        { text: '📊 Odds', callback_data: 'menu_odds' }
+        { text: '⚽ Live Games', callback_data: 'menu_live' },
+        { text: '📊 Odds & Analysis', callback_data: 'menu_odds' }
       ],
       [
         { text: '🏆 Standings', callback_data: 'menu_standings' },
-        { text: '📰 News', callback_data: 'menu_news' }
+        { text: '📰 Latest News', callback_data: 'menu_news' }
       ],
       [
-        { text: '💎 Subscribe', callback_data: 'menu_vvip' },
-        { text: '👤 Profile', callback_data: 'menu_profile' }
+        { text: '💰 Subscribe to VVIP', callback_data: 'menu_vvip' },
+        { text: '👤 My Profile', callback_data: 'menu_profile' }
       ],
       [
-        { text: '❓ Help', callback_data: 'menu_help' },
-        { text: '⚙️ Settings', callback_data: 'menu_help' }
+        { text: '❓ Help', callback_data: 'menu_help' }
       ]
     ]
   }
@@ -84,17 +86,48 @@ export const sportsMenu = {
 export const subscriptionMenu = {
   text: `${BETRIX_HEADER}
 
-🎉 Unlock Premium — simple plans, instant access.
+*🎉 Unlock Premium Features with VVIP*
 
-Choose a plan below. Payment methods shown after selection.`,
+✨ *VVIP Benefits:*
+• 🤖 Unlimited AI analysis
+• 📈 Real-time odds & arbitrage alerts
+• 🎯 Advanced predictions (85%+ accuracy)
+• 📊 Historical data & trend analysis
+• 🔔 Custom notifications
+• 💳 No ads
 
-  // Compact subscription card layout
+💰 *Tier Pricing (KES):*
+┌────────────────────────────────┐
+│ Free        → Community access │
+│ Pro    → KES 899/month  📊      │
+│ VVIP   → KES 2,699/month ⭐    │ Most Popular
+│ Plus   → KES 8,999/month 💎    │ Premium+VIP
+└────────────────────────────────┘
+
+🏪 *Payment Methods Available:*
+${TILL_NUMBER ? `🏪 Safaricom Till #${TILL_NUMBER} - Instant (KES only)` : '🏪 Safaricom Till - Instant (KES)'}
+📱 M-Pesa STK - Push & confirm
+💳 PayPal - International cards
+₿ Binance Pay - Crypto options
+🏦 Bank Transfer - SWIFT (EUR/USD)
+
+*Choose Your Plan:*
+(Payment will be processed after selection)`,
+  
   reply_markup: {
     inline_keyboard: [
-      [ { text: '📊 Pro — KES 899/mo', callback_data: 'sub_pro' } ],
-      [ { text: '👑 VVIP — KES 2,699/mo', callback_data: 'sub_vvip' } ],
-      [ { text: '💎 PLUS — KES 8,999/mo', callback_data: 'sub_plus' } ],
-      [ { text: '🔙 Back', callback_data: 'menu_main' } ]
+      [
+        { text: '📊 Pro (KES 899)', callback_data: 'sub_pro' }
+      ],
+      [
+        { text: '👑 VVIP (KES 2,699) - POPULAR ⭐', callback_data: 'sub_vvip' }
+      ],
+      [
+        { text: '💎 BETRIX Plus (KES 8,999)', callback_data: 'sub_plus' }
+      ],
+      [
+        { text: '🔙 Back to Menu', callback_data: 'menu_main' }
+      ]
     ]
   }
 };
@@ -207,37 +240,27 @@ Response time: ~2 hours
 // ============================================================================
 
 export function formatLiveGames(games, sport = 'Football') {
-  // Lively, helpful fallback when no live matches
   if (!games || games.length === 0) {
     return `${BETRIX_HEADER}
 
-🔴 *No live ${sport.toLowerCase()} matches right now*
+*No live ${sport.toLowerCase()} matches right now*
 
-Seems quiet at the moment — here's what you can do:
-• 🔎 Try /today to see upcoming fixtures.
-• 🔔 Turn on alerts for your favourite teams in /profile.
-• 📈 Check trending odds: /odds <fixture-id>
+⏳ Check back later for exciting matchups! 🎯
 
-I'll notify you when a match starts. Meanwhile, want a quick prediction demo? Type "analyze Liverpool vs Man City".`;
+🔔 *Tip:* Follow us for match alerts`;
   }
 
   let text = `${BETRIX_HEADER}
 
-🔴 *Live ${sport} Matches* (${games.length}) — quick highlights:
+*Live ${sport} Matches* (${games.length})
 
 `;
-
+  
   for (let i = 0; i < Math.min(games.length, 10); i++) {
     const game = games[i];
-    // Friendly formatting with emoji and short status
-    const status = game.status || 'LIVE';
-    const minute = game.minute ? ` • ${game.minute}'` : '';
-    text += `${i + 1}. *${game.home}* vs *${game.away}* — ${status}${minute}\n`;
-    if (game.score) text += `   Score: ${game.score.home} - ${game.score.away}\n`;
-    text += `   Tip: ${game.tip || 'No tip yet — run /analyze for a short preview'}\n\n`;
+    text += `${i + 1}. ${game.home} vs ${game.away}\n   ⏱️ ${game.time}\n\n`;
   }
-
-  text += `⚡ Use /odds <fixture-id> to view current odds, or tap /analyze <home> vs <away> for a prediction.`;
+  
   return text;
 }
 
@@ -246,24 +269,22 @@ I'll notify you when a match starts. Meanwhile, want a quick prediction demo? Ty
 // ============================================================================
 
 export function formatOdds(odds, fixtureId) {
-  // Provide a lively, explanatory odds summary
   return `${BETRIX_HEADER}
 
-💰 *Odds & Quick Analysis*
+*Odds & Analysis*
 
 Match: ${fixtureId || 'Fixture details'}
 
-🏷️ *Odds Snapshot:*
-• Home Win: ${odds?.home || '1.50'}
-• Draw: ${odds?.draw || '3.20'}
-• Away Win: ${odds?.away || '4.50'}
+💰 *Current Odds:*
+Home Win: 1.50
+Draw: 3.20
+Away Win: 4.50
 
-🔍 *Quick Insight:*
-• Recommendation: *${odds?.recommended || 'Home Win'}*
-• Confidence: *${odds?.confidence || '78%'}*
+📊 *AI Analysis:*
+Confidence: 78%
+Recommended Bet: Home Win
 
-💡 Tip: Compare multiple bookmakers and look for >10% edge before staking.
-Type /analyze <home> vs <away> for a short prediction, or upgrade to VVIP for full reports.`;
+*Tip:* Full analysis available in VVIP tier`;
 }
 
 // ============================================================================
@@ -271,16 +292,15 @@ Type /analyze <home> vs <away> for a short prediction, or upgrade to VVIP for fu
 // ============================================================================
 
 export function formatStandings(league, leagueName = 'Premier League') {
-  // Lively standings with short actionable note
   return `${BETRIX_HEADER}
 
-🏆 *${leagueName} - Current Standings*
+*${leagueName} Standings*
 
-1. Team A · MP:10 · W:7 · D:2 · L:1 · GD:+12 · Pts:23
-2. Team B · MP:10 · W:6 · D:3 · L:1 · GD:+10 · Pts:21
-3. Team C · MP:10 · W:6 · D:2 · L:2 · GD:+8  · Pts:20
+1. Team A          MP:10 W:7 D:2 L:1 GD:+12 Pts:23
+2. Team B          MP:10 W:6 D:3 L:1 GD:+10 Pts:21
+3. Team C          MP:10 W:6 D:2 L:2 GD:+8  Pts:20
 
-🔎 Want deeper analytics? Try /analyze <team1> vs <team2> or upgrade to VVIP for detailed trend reports.`;
+📊 More details in full view`;
 }
 
 // ============================================================================
@@ -288,26 +308,15 @@ export function formatStandings(league, leagueName = 'Premier League') {
 // ============================================================================
 
 export function formatNews(articles = []) {
-  if (!articles || articles.length === 0) {
-    return `${BETRIX_HEADER}
+  return `${BETRIX_HEADER}
 
-📰 *Latest Sports News*
+*Latest Sports News*
 
-No fresh headlines right now — here's what's trending recently:
-• Transfer gossip: top 5 moves
-• Injury round-up: key players returning
-• Weekend previews: matches to watch
+• Transfer window: Top 5 moves this season
+• Injury updates: Which stars are back?
+• Weekend previews: Must-watch matches
 
-Type /news <id> to open a story. Want a curated digest? Upgrade to VVIP for personalized news.`;
-  }
-
-  let text = `${BETRIX_HEADER}\n\n📰 *Latest Sports Headlines*\n\n`;
-  for (let i = 0; i < Math.min(5, articles.length); i++) {
-    const a = articles[i];
-    text += `• ${a.title || 'Headline ' + (i+1)} — ${a.source || 'Source'}\n`;
-  }
-  text += `\n🔎 Use /news <id> to read full story or /help for support.`;
-  return text;
+📰 Read more: /news [story_id]`;
 }
 
 // ============================================================================
@@ -317,30 +326,26 @@ Type /news <id> to open a story. Want a curated digest? Upgrade to VVIP for pers
 export function formatProfile(user) {
   const tier = user?.tier || 'FREE';
   const joined = user?.created_at || 'Unknown';
-  const bets = Number(user?.total_bets || 0);
-  const wins = Number(user?.total_wins || 0);
+  const bets = user?.total_bets || 0;
+  const wins = user?.total_wins || 0;
   const winRate = bets > 0 ? ((wins / bets) * 100).toFixed(1) : 0;
-  const streak = user?.current_streak || 0;
 
   return `${BETRIX_HEADER}
 
-👤 *Your Profile*
+*Your Profile*
 
-ID: \`${user?.id || 'N/A'}\`
+👤 ID: ${user?.id || 'N/A'}
 ⭐ Tier: *${tier}*
 📅 Joined: ${joined}
 
-📊 *Performance*
-• Total Bets: ${bets}
-• Wins: ${wins}
-• Win Rate: ${winRate}%
-• Current Streak: ${streak} wins
-
-🎯 *Pro Tip:* Keep your stakes proportional to bankroll. Use /vvip for full analytics and personalized staking plans.
+📊 *Stats:*
+Total Bets: ${bets}
+Wins: ${wins}
+Win Rate: ${winRate}%
 
 🎁 Referral Code: \`${user?.referral_code || 'N/A'}\`
 
-Need help? Tap /help or contact support@betrix.app`;
+Use /vvip to upgrade or manage your subscription`;
 }
 
 // ============================================================================
