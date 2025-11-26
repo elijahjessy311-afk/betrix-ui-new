@@ -302,6 +302,7 @@ async function handleIntent(intent, text, userId, chatId, redis, services) {
 }
 
 export {
+  handleMessage,
   handleStateSpecificInput,
   handleSignupName,
   handleSignupCountry,

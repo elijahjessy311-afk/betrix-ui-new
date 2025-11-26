@@ -6,30 +6,11 @@
 import { Logger } from '../utils/logger.js';
 const logger = new Logger('Callbacks');
 import { handleBettingSitesCallback } from './betting-sites.js';
+import { handlePaymentCallback, handlePaymentMethodSelection } from './payment-router.js';
 
 // ============================================================================
 // CALLBACK ROUTER
 // ============================================================================
-
-// Handle payment callbacks (pay_mpesa_signup, pay_paypal_signup, etc)
-async function handlePaymentCallback(data, userId, chatId, redis, services) {
-  try {
-    const { createPaymentOrder, getPaymentInstructions } = await import('./payment-router.js');
-    logger.info('handlePaymentCallback routed', { data, userId });
-    return {
-      chat_id: chatId,
-      text: '💳 Payment method selected. Processing...',
-      parse_mode: 'Markdown'
-    };
-  } catch (err) {
-    logger.error('handlePaymentCallback error', err);
-    return {
-      chat_id: chatId,
-      text: '❌ Payment error. Try again later.',
-      parse_mode: 'Markdown'
-    };
-  }
-}
 
 export async function handleCallbackQuery(callbackData, userId, chatId, redis, services) {
   logger.info('handleCallbackQuery', { callbackData, userId, chatId });
