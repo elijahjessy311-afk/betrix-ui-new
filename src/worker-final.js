@@ -35,7 +35,7 @@ const logger = new Logger("FinalWorker");
 
 try {
   validateConfig();
-  logger.info("✅ Configuration validated");
+  logger.info("✅ Configuration validated (API_FOOTBALL_KEY or API_SPORTS_KEY required)");
 } catch (err) {
   logger.error("Configuration failed", err);
   process.exit(1);
