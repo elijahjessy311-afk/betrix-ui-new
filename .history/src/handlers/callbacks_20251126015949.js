@@ -264,16 +264,6 @@ async function handlePaymentCallback(data, chatId, userId, redis, services) {
       keyboard.inline_keyboard.push([
         { text: '💳 Pay with PayPal', url: instructions.checkoutUrl }
       ]);
-      // Also provide a server-side checkout redirect (use PUBLIC_URL if configured)
-      try {
-        const base = process.env.PUBLIC_URL || 'https://betrix.app';
-        const redirect = `${base.replace(/\/$/, '')}/pay/checkout?orderId=${order.orderId}`;
-        keyboard.inline_keyboard.push([
-          { text: '🔗 Open Checkout (BETRIX)', url: redirect }
-        ]);
-      } catch (e) {
-        // ignore
-      }
     }
     keyboard.inline_keyboard.push([
       { text: '✅ Confirm Payment Sent', callback_data: `verify_${order.orderId}` },

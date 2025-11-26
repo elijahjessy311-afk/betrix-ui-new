@@ -10,9 +10,8 @@ import Redis from "ioredis";
 import fetch from "node-fetch";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import express from "express";
-import fs from 'fs/promises';
 import crypto from "crypto";
-import { createPaymentOrder, getPaymentInstructions, verifyAndActivatePayment } from "./handlers/payment-router.js";
+import { createPaymentOrder, getPaymentInstructions } from "./handlers/payment-router.js";
 import paypalSdk from '@paypal/checkout-server-sdk';
 
 console.log("\n - worker.js:15" + "=".repeat(130));
@@ -2464,39 +2463,8 @@ app.get('/pay/checkout', async (req, res) => {
 
     const checkoutUrl = order?.metadata?.checkoutUrl || order?.instructions?.checkoutUrl;
     if (checkoutUrl) {
-      // If we have a branded checkout page, render it with the approval url
-      try {
-        const tpl = await fs.readFile('./public/checkout.html', 'utf8');
-        const html = tpl
-          .replace(/{{ORDER_ID}}/g, orderId)
-          .replace(/{{CHECKOUT_URL}}/g, checkoutUrl)
-          .replace(/{{BRAND}}/g, 'BETRIX')
-          .replace(/{{AMOUNT}}/g, String(order.totalAmount || ''));
-
-        // In CI mode, write approval URL to artifacts for easier retrieval
-        try {
-          if (process.env.NONINTERACTIVE === '1' || process.env.CI === 'true') {
-            await fs.mkdir('./artifacts', { recursive: true });
-            await fs.writeFile('./artifacts/approval-url.txt', checkoutUrl, 'utf8');
-          }
-        } catch (e) {
-          console.warn('[EXPRESS] failed to write approval artifact', e?.message || e);
-        }
-
-        return res.send(html);
-      } catch (e) {
-        // No branded page — redirect directly
-        // In CI, also attempt to write approval url artifact
-        try {
-          if (process.env.NONINTERACTIVE === '1' || process.env.CI === 'true') {
-            await fs.mkdir('./artifacts', { recursive: true });
-            await fs.writeFile('./artifacts/approval-url.txt', checkoutUrl, 'utf8');
-          }
-        } catch (werr) {
-          console.warn('[EXPRESS] failed to write approval artifact', werr?.message || werr);
-        }
-        return res.redirect(checkoutUrl);
-      }
+      // Redirect user to PayPal approval page
+      return res.redirect(checkoutUrl);
     }
 
     // Render a small page with instructions if no checkout URL
@@ -2505,77 +2473,6 @@ app.get('/pay/checkout', async (req, res) => {
   } catch (err) {
     console.error('[EXPRESS] /pay/checkout error', err);
     return res.status(500).send('Server error');
-  }
-});
-
-// Programmatic PayPal capture endpoint: POST /pay/capture
-app.post('/pay/capture', express.json(), async (req, res) => {
-  console.log('[EXPRESS] POST /pay/capture - programmatic capture');
-  try {
-    const { provider = 'PAYPAL', providerRef } = req.body || {};
-    if (!providerRef) return res.status(400).json({ ok: false, message: 'missing providerRef' });
-
-    const redisClient = new Redis(process.env.REDIS_URL);
-    const orderId = await redisClient.get(`payment:by_provider_ref:${provider}:${providerRef}`);
-    if (!orderId) return res.status(404).json({ ok: false, message: 'order_not_found' });
-
-    if (provider === 'PAYPAL') {
-      if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
-        return res.status(500).json({ ok: false, message: 'paypal_not_configured' });
-      }
-
-      const mode = (process.env.PAYPAL_MODE || 'sandbox').toLowerCase();
-      const env = mode === 'live'
-        ? new paypalSdk.core.LiveEnvironment(process.env.PAYPAL_CLIENT_ID, process.env.PAYPAL_CLIENT_SECRET)
-        : new paypalSdk.core.SandboxEnvironment(process.env.PAYPAL_CLIENT_ID, process.env.PAYPAL_CLIENT_SECRET);
-      const client = new paypalSdk.core.PayPalHttpClient(env);
-
-      try {
-        const request = new paypalSdk.orders.OrdersCaptureRequest(providerRef);
-        request.requestBody({});
-        const response = await client.execute(request);
-        const capture = response?.result?.purchase_units?.[0]?.payments?.captures?.[0];
-        const captureId = capture?.id || `PAYPAL_CAP_${Date.now()}`;
-
-        // Activate internal order
-        await verifyAndActivatePayment(redisClient, orderId, captureId);
-
-        // notify admin
-        try {
-          if (process.env.ADMIN_TELEGRAM_ID && process.env.TELEGRAM_TOKEN) {
-            const adminMsg = `✅ PayPal capture applied\nOrder: ${orderId}\nPayPal: ${providerRef}\nCapture: ${captureId}`;
-            await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: process.env.ADMIN_TELEGRAM_ID, text: adminMsg })
-            });
-          }
-        } catch (nerr) {
-          console.warn('[PAYPAL] failed to notify admin', nerr?.message || nerr);
-        }
-
-        return res.json({ ok: true, orderId, captureId });
-      } catch (err) {
-        console.error('[PAYPAL] capture failed', err);
-        // notify admin of failure
-        try {
-          if (process.env.ADMIN_TELEGRAM_ID && process.env.TELEGRAM_TOKEN) {
-            const adminMsg = `❌ PayPal capture FAILED\nOrder: ${orderId}\nPayPal: ${providerRef}\nError: ${err?.message || String(err)}`;
-            await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: process.env.ADMIN_TELEGRAM_ID, text: adminMsg })
-            });
-          }
-        } catch (nerr) { /* ignore */ }
-        return res.status(500).json({ ok: false, error: err?.message || String(err) });
-      }
-    }
-
-    return res.status(400).json({ ok: false, message: 'unsupported_provider' });
-  } catch (err) {
-    console.error('[EXPRESS] /pay/capture error', err);
-    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
@@ -2606,19 +2503,6 @@ app.post('/webhook/mpesa', async (req, res) => {
       await redisClient.incr(key);
       await redisClient.expire(key, 60 * 60 * 24 * 7);
       console.warn('[MPESA] mapping miss for notification', payload);
-      // notify admin about mapping miss if configured
-      try {
-        if (process.env.ADMIN_TELEGRAM_ID && process.env.TELEGRAM_TOKEN) {
-          const adminMsg = `⚠️ MPesa mapping miss on ${new Date().toISOString()}\nPayload: ${JSON.stringify(payload)}`;
-          await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: process.env.ADMIN_TELEGRAM_ID, text: adminMsg })
-          });
-        }
-      } catch (nerr) {
-        console.warn('[MPESA] failed to notify admin', nerr?.message || nerr);
-      }
       return res.status(202).json({ ok: false, message: 'mapping_miss' });
     }
 
@@ -2627,20 +2511,6 @@ app.post('/webhook/mpesa', async (req, res) => {
 
     const paymentRouter = await import('./handlers/payment-router.js');
     await paymentRouter.verifyAndActivatePayment(redisClient, orderId, tx);
-
-    // notify admin about activation
-    try {
-      if (process.env.ADMIN_TELEGRAM_ID && process.env.TELEGRAM_TOKEN) {
-        const adminMsg = `✅ MPesa payment applied\nOrder: ${orderId}\nTx: ${tx}`;
-        await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: process.env.ADMIN_TELEGRAM_ID, text: adminMsg })
-        });
-      }
-    } catch (nerr) {
-      console.warn('[MPESA] failed to notify admin of activation', nerr?.message || nerr);
-    }
 
     return res.json({ ok: true, orderId, tx });
   } catch (err) {

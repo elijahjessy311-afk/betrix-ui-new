@@ -48,10 +48,6 @@ export async function handleCallback(data, chatId, userId, redis, services) {
     if (data.startsWith('pay_')) {
       return await handlePaymentCallback(data, chatId, userId, redis, services);
     }
-
-    if (data.startsWith('news_')) {
-      return await handleNewsArticleCallback(data, chatId, userId, redis, services);
-    }
     
     if (data.startsWith('profile_')) {
       return handleProfileCallback(data, chatId, userId, redis);
@@ -221,67 +217,29 @@ async function handlePaymentCallback(data, chatId, userId, redis, services) {
       };
     }
 
-      // Get payment instructions (use redis + orderId signature)
-      const instructions = await getPaymentInstructions(redis, order.orderId, method);
+    // Get payment instructions
+    const instructions = await getPaymentInstructions(order, method);
 
-      // Normalize instructions into a markdown-friendly block
-      let instructionsText = '';
-      try {
-        if (!instructions) {
-          instructionsText = '_No instructions available for this method._';
-        } else if (instructions.checkoutUrl) {
-          // PayPal or similar
-          instructionsText = `${instructions.description || ''}\n\n[🔗 Click to Pay](${instructions.checkoutUrl})`;
-        } else if (instructions.tillNumber) {
-          // Safaricom till
-          instructionsText = `${instructions.description || ''}\n\nTill: \`${instructions.tillNumber}\`\nRef: \`${instructions.reference}\`\nAmount: *${instructions.amount} ${instructions.currency || 'KES'}*`;
-        } else if (instructions.steps && Array.isArray(instructions.steps)) {
-          instructionsText = `${instructions.description || ''}\n\n` + instructions.steps.map((s, i) => `${i + 1}. ${s}`).join('\n');
-        } else {
-          // Fallback: stringify
-          instructionsText = JSON.stringify(instructions, null, 2);
-        }
-      } catch (e) {
-        logger.warn('Failed to render payment instructions', e);
-        instructionsText = instructions && typeof instructions === 'string' ? instructions : '_Unable to build payment instructions_';
-      }
+    // Build confirmation text
+    let confirmText = `✅ *Payment Order Created*
 
+📋 Order ID: \`${order.orderId}\`
+⭐ Tier: ${tier}
+💰 Amount: KES ${getTierAmount(tier)}
 
+*Payment Method: ${getMethodName(method)}*
 
+${instructions.text}
 
+⏳ After payment, click "Confirm Payment" below.`;
 
-
-
-
-
-      // Build comprehensive confirmation screen
-      let confirmText = `✅ *Payment Order Created*\n\n📋 *Order Details:*\nOrder ID: \`${order.orderId}\`\nUser ID: \`${userId}\`\nTier: *${getTierDisplayName(tier)}*\nAmount: *KES ${getTierAmount(tier)}*\nStatus: ⏳ Pending Payment\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💳 *Payment Method: ${getMethodName(method)}*\n\n${instructionsText}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n⏱️ *Next Steps:*\n1️⃣ Send payment using the details above\n2️⃣ Wait for confirmation (usually instant)\n3️⃣ Click "✅ Confirm Payment Sent" when done\n\n❗ *Important:*\n• Screenshot your payment confirmation for support\n• Payment may take 5-10 minutes to appear\n• Check "Check Status" to verify payment\n\n*Questions?* Contact support@betrix.app`;
-
-    // Build keyboard with confirmation + status check
-    // If PayPal checkout URL is available, show a direct Pay button linking to PayPal
-    const keyboard = { inline_keyboard: [] };
-    if (instructions && instructions.checkoutUrl) {
-      keyboard.inline_keyboard.push([
-        { text: '💳 Pay with PayPal', url: instructions.checkoutUrl }
-      ]);
-      // Also provide a server-side checkout redirect (use PUBLIC_URL if configured)
-      try {
-        const base = process.env.PUBLIC_URL || 'https://betrix.app';
-        const redirect = `${base.replace(/\/$/, '')}/pay/checkout?orderId=${order.orderId}`;
-        keyboard.inline_keyboard.push([
-          { text: '🔗 Open Checkout (BETRIX)', url: redirect }
-        ]);
-      } catch (e) {
-        // ignore
-      }
-    }
-    keyboard.inline_keyboard.push([
-      { text: '✅ Confirm Payment Sent', callback_data: `verify_${order.orderId}` },
-      { text: '🔄 Check Status', callback_data: `status_${order.orderId}` }
-    ]);
-    keyboard.inline_keyboard.push([
-      { text: '❌ Cancel Order', callback_data: 'menu_vvip' }
-    ]);
+    // Build keyboard with confirmation button
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: '✅ Confirm Payment Sent', callback_data: `verify_${order.orderId}` }],
+        [{ text: '❌ Cancel', callback_data: 'menu_vvip' }]
+      ]
+    };
 
     return {
       method: 'editMessageText',
@@ -294,7 +252,7 @@ async function handlePaymentCallback(data, chatId, userId, redis, services) {
     logger.error('handlePaymentCallback error', err);
     return {
       chat_id: chatId,
-      text: `❌ Payment error: ${err.message}\n\nTry again or contact support`,
+      text: `❌ Payment error: ${err.message}`,
       parse_mode: 'Markdown'
     };
   }
@@ -408,61 +366,6 @@ Hours: 9 AM - 6 PM EAT`
 }
 
 // ============================================================================
-// NEWS ARTICLE CALLBACK (news_<index>)
-// ============================================================================
-
-async function handleNewsArticleCallback(data, chatId, userId, redis, services) {
-  logger.info('handleNewsArticleCallback', { data, userId });
-
-  const parts = data.split('_');
-  const idx = Number(parts[1]);
-
-  // Try to fetch articles from services
-  let articles = [];
-  try {
-    if (services && services.api) {
-      if (typeof services.api.fetchNews === 'function') {
-        articles = await services.api.fetchNews();
-      } else if (typeof services.api.get === 'function') {
-        const res = await services.api.get('/news');
-        articles = res?.data || res || [];
-      }
-    }
-  } catch (e) {
-    logger.warn('Failed to fetch news in callback', e);
-  }
-
-  const article = Array.isArray(articles) && articles[idx] ? articles[idx] : null;
-
-  if (!article) {
-    return {
-      method: 'editMessageText',
-      chat_id: chatId,
-      text: '📰 Article not available. Try /news to refresh.',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'menu_news' }]] },
-      parse_mode: 'Markdown'
-    };
-  }
-
-  const text = `📰 *${article.title || 'Article'}*\n\n${article.summary || article.description || article.content || 'Read more at the source.'}\n\n🔗 [Open in browser](${article.url || '#'})`;
-
-  const keyboard = {
-    inline_keyboard: [
-      [{ text: 'Open in Browser', url: article.url || undefined }],
-      [{ text: '🔙 Back to News', callback_data: 'menu_news' }]
-    ]
-  };
-
-  return {
-    method: 'editMessageText',
-    chat_id: chatId,
-    text,
-    reply_markup: keyboard,
-    parse_mode: 'Markdown'
-  };
-}
-
-// ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
 
@@ -474,16 +377,6 @@ function getTierAmount(tier) {
     'FREE': 0
   };
   return amounts[tier] || 2699;
-}
-
-function getTierDisplayName(tier) {
-  const names = {
-    'PRO': 'Pro Tier 📊',
-    'VVIP': 'VVIP Tier 👑',
-    'PLUS': 'BETRIX Plus 💎',
-    'FREE': 'Free Tier'
-  };
-  return names[tier] || tier;
 }
 
 function getMethodName(method) {

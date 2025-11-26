@@ -6,7 +6,6 @@ import { Logger } from '../utils/logger.js';
 import { verifyAndActivatePayment } from './payment-router.js';
 import crypto from 'crypto';
 import fetch from 'node-fetch';
-import { sendAdminNotification } from '../services/notifier.js';
 
 const logger = new Logger('PaymentWebhook');
 
@@ -20,8 +19,6 @@ async function alertAdmin(bot, subject, details = {}) {
     const text = `⚠️ Payment mapping miss - ${subject}\n\n${payload}`;
     // Best-effort notify admin
     await bot.sendMessage(adminId, text);
-    // also send to other channels (Slack/PagerDuty) if configured
-    try { await sendAdminNotification(subject, details); } catch (e) { logger.warn('sendAdminNotification failed', e?.message || String(e)); }
   } catch (e) {
     logger.warn('Failed to send admin alert', e?.message || String(e));
   }
