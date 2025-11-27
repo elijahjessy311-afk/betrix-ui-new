@@ -255,10 +255,10 @@ if (typeof v2Handler.setTelemetryRedis === 'function') {
 
 // ===== INITIALIZE PERFORMANCE OPTIMIZER =====
 const perfOptimizer = {
-  cache: perfUtils.smartCache(redis),
-  prefetcher: perfUtils.prefetchData(redis, sportsAggregator),
-  rateLimiter: perfUtils.createRateLimiter(),
-  metrics: perfUtils.getMetrics()
+  cache: smartCache(redis),
+  prefetcher: prefetchData(redis, sportsAggregator),
+  rateLimiter: createRateLimiter(),
+  metrics: getMetrics()
 };
 logger.info('✅ Performance Optimizer initialized with multi-tier caching and prefetching');
 
