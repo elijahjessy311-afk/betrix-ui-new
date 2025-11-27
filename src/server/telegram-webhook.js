@@ -15,9 +15,22 @@ module.exports = async function telegramWebhookHandler(req, res) {
   try {
     const body = req.body || {};
     const client = await getRedis();
-    const job = JSON.stringify({ jobId: `wh-${Date.now()}`, payload: body });
-    await client.rPush("telegram:webhook:queue", job); await client.rPush("webhooks:incoming", job);
-    console.log("SHIM_ENQUEUED", { jobId: job.slice(0,64) });
+
+    // Enqueue the raw Telegram update onto the canonical list the worker consumes
+    // Worker (src/worker-db.js) expects JSON updates on `telegram:updates` and will
+    // JSON.parse the popped value directly into the update object.
+    await client.rPush("telegram:updates", JSON.stringify(body));
+
+    // Keep additional audit/debug queues for observability
+    try {
+      const auditJob = JSON.stringify({ jobId: `wh-${Date.now()}`, payload: body });
+      await client.rPush("telegram:webhook:queue", auditJob);
+      await client.rPush("webhooks:incoming", auditJob);
+      console.log("SHIM_ENQUEUED", { jobId: auditJob.slice(0,64) });
+    } catch (e) {
+      console.warn("SHIM_AUDIT_QUEUE_WARN", e && e.message ? e.message : e);
+    }
+
     return res.status(200).json({ ok:true, enqueued:true });
   } catch (err) {
     console.error("SHIM_ENQUEUE_ERR", err && err.stack ? err.stack : String(err));

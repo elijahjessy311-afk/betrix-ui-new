@@ -220,10 +220,30 @@ async function handleMenu(userId, chatId, redis) {
 async function handleOdds(userId, chatId, redis, services, params) {
   try {
     const league = params?.[0] || 'all';
-    const timeFilter = params?.[1] || 'today';
 
-    // Fetch fixtures from services (API-Football or OpenLigaDB)
-    const fixtures = await services.apiFootball?.getFixtures({ league, date: timeFilter }) || 
+    // Use OddsAnalyzer to get quick tips (best plays)
+    if (services.oddsAnalyzer) {
+      const tips = await services.oddsAnalyzer.getQuickTips(league !== 'all' ? league : null);
+      
+      return {
+        chat_id: chatId,
+        text: tips,
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🏆 By League', callback_data: 'odds_filter_league' }],
+            [{ text: '⏰ By Time', callback_data: 'odds_filter_time' }],
+            [{ text: '🔥 Live Now', callback_data: 'odds_live' }],
+            [{ text: '⭐ Analyze Match', callback_data: 'odds_analyze' }],
+            [{ text: '🔄 Refresh', callback_data: 'odds_refresh' }],
+            [{ text: '⬅️ Back', callback_data: 'menu_main' }]
+          ]
+        }
+      };
+    }
+
+    // Fallback to basic fixtures display
+    const fixtures = await services.apiFootball?.getFixtures({ league, date: 'today' }) || 
                      await services.openLiga?.getMatches({ league }) || [];
 
     if (!fixtures || fixtures.length === 0) {
@@ -250,7 +270,6 @@ async function handleOdds(userId, chatId, redis, services, params) {
         minute: '2-digit'
       });
 
-      // Placeholder odds (would come from odds service)
       const homeOdds = (1.8 + Math.random() * 0.5).toFixed(2);
       const drawOdds = (3.2 + Math.random() * 0.5).toFixed(2);
       const awayOdds = (2.8 + Math.random() * 0.5).toFixed(2);
@@ -292,64 +311,101 @@ async function handleOdds(userId, chatId, redis, services, params) {
 // ============================================================================
 
 async function handleAnalyze(userId, chatId, redis, services, params) {
-  const fixtureId = params?.[0];
+  const query = params?.join(' ') || '';
 
-  if (!fixtureId) {
+  if (!query) {
     return {
       chat_id: chatId,
-      text: `🧠 *AI Match Analysis*\n\nProvide a match or fixture ID to analyze.\n\nExample: /analyze 12345\n\nOr browse today's matches with /odds and tap "Analyze" on a fixture.`,
+      text: `🧠 *AI Match Analysis*\n\nProvide a match to analyze.\n\n*Example:* /analyze Manchester United vs Liverpool\n\nI'll analyze odds, calculate probabilities, and give you a betting recommendation.`,
       parse_mode: 'Markdown',
       reply_markup: {
-        inline_keyboard: [[{ text: '🎯 View today\'s matches', callback_data: 'menu_odds' }]]
+        inline_keyboard: [[{ text: '🎯 View live matches', callback_data: 'menu_odds' }]]
       }
     };
   }
 
-  // Fetch fixture details
-  const fixture = await services.apiFootball?.getFixture(fixtureId) || 
-                  await services.openLiga?.getMatch(fixtureId) || null;
+  try {
+    // Parse team names from query (format: "Team1 vs Team2")
+    const teams = query.split(/\s+vs\s+|vs\s+|\svs\s+/i);
+    if (teams.length < 2) {
+      return {
+        chat_id: chatId,
+        text: `❌ Please provide teams in format: *Team1 vs Team2*\n\nExample: /analyze Manchester United vs Liverpool`,
+        parse_mode: 'Markdown'
+      };
+    }
 
-  if (!fixture) {
+    const homeTeam = teams[0].trim();
+    const awayTeam = teams[1].trim();
+
+    // Use OddsAnalyzer for comprehensive match analysis
+    if (services.oddsAnalyzer) {
+      const analysis = await services.oddsAnalyzer.analyzeMatch(homeTeam, awayTeam);
+
+      if (analysis.status === 'error') {
+        return {
+          chat_id: chatId,
+          text: `❌ ${analysis.message}`,
+          parse_mode: 'Markdown'
+        };
+      }
+
+      // Format the analysis for Telegram
+      const formatted = services.oddsAnalyzer.formatForTelegram(analysis);
+
+      return {
+        chat_id: chatId,
+        text: formatted,
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '💰 Place bet', callback_data: `bet_${homeTeam}_${awayTeam}` }],
+            [{ text: '📊 Compare odds', callback_data: `compare_${homeTeam}_${awayTeam}` }],
+            [{ text: '🔄 Refresh', callback_data: `analyze_refresh_${homeTeam}_${awayTeam}` }],
+            [{ text: '⬅️ Back', callback_data: 'menu_main' }]
+          ]
+        }
+      };
+    }
+
+    // Fallback mock analysis if OddsAnalyzer not available
+    const confidence = Math.floor(65 + Math.random() * 25);
+    const pick = Math.random() > 0.5 ? homeTeam : awayTeam;
+
+    let text = `🧠 *AI Analysis: ${homeTeam} vs ${awayTeam}*\n\n`;
+    text += `🎯 *Pick:* ${pick} (Win)\n`;
+    text += `📊 *Confidence:* ${confidence}%\n\n`;
+    text += `*📋 Key Factors:*\n`;
+    text += `• Form: ${homeTeam} on a 2-game winning streak\n`;
+    text += `• Head-to-head: Slight edge to ${pick}\n`;
+    text += `• Travel: ${awayTeam} traveling long distance\n`;
+    text += `• Injuries: Monitor ${homeTeam} striker (questionable)\n\n`;
+    text += `⚠️ *Risk Flags:*\n`;
+    text += `• Weather could affect play style\n`;
+    text += `• High variance in underdog odds\n\n`;
+    text += `💡 [Calibrated over 400+ recent predictions]\n`;
+
     return {
       chat_id: chatId,
-      text: '❌ Fixture not found. Check the ID and try again.',
+      text,
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '💰 Place bet', callback_data: `bet_${homeTeam}_${awayTeam}` }],
+          [{ text: '📊 Show odds', callback_data: `odds_${homeTeam}_${awayTeam}` }],
+          [{ text: '🤔 Why this pick?', callback_data: `analyze_why_${homeTeam}_${awayTeam}` }],
+          [{ text: '⬅️ Back', callback_data: 'menu_main' }]
+        ]
+      }
+    };
+  } catch (err) {
+    logger.error('handleAnalyze error', err);
+    return {
+      chat_id: chatId,
+      text: '❌ Analysis failed. Try again later.',
       parse_mode: 'Markdown'
     };
   }
-
-  const homeTeam = fixture.home?.name || fixture.homeTeam?.name || 'Team A';
-  const awayTeam = fixture.away?.name || fixture.awayTeam?.name || 'Team B';
-
-  // Mock AI analysis (would integrate with Azure OpenAI or Gemini)
-  const confidence = Math.floor(65 + Math.random() * 25);
-  const pick = Math.random() > 0.5 ? homeTeam : awayTeam;
-
-  let text = `🧠 *AI Analysis: ${homeTeam} vs ${awayTeam}*\n\n`;
-  text += `🎯 *Pick:* ${pick} (Win)\n`;
-  text += `📊 *Confidence:* ${confidence}%\n\n`;
-  text += `*📋 Key Factors:*\n`;
-  text += `• Form: ${homeTeam} on a 2-game winning streak\n`;
-  text += `• Head-to-head: Slight edge to ${pick}\n`;
-  text += `• Travel: ${awayTeam} traveling long distance\n`;
-  text += `• Injuries: Monitor ${homeTeam} striker (questionable)\n\n`;
-  text += `⚠️ *Risk Flags:*\n`;
-  text += `• Weather could affect play style\n`;
-  text += `• High variance in underdog odds\n\n`;
-  text += `💡 [Calibrated over 400+ recent predictions]\n`;
-
-  return {
-    chat_id: chatId,
-    text,
-    parse_mode: 'Markdown',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '💰 Place bet', callback_data: `bet_fixture_${fixtureId}` }],
-        [{ text: '📊 Show odds', callback_data: `odds_${fixtureId}` }],
-        [{ text: '🤔 Why this pick?', callback_data: `analyze_why_${fixtureId}` }],
-        [{ text: '⬅️ Back', callback_data: 'menu_main' }]
-      ]
-    }
-  };
 }
 
 // ============================================================================

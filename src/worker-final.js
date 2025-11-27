@@ -22,6 +22,9 @@ import RSSAggregator from "./services/rss-aggregator.js";
 import FootballDataService from "./services/footballdata.js";
 import ScoreBatService from "./services/scorebat.js";
 import Scrapers from "./services/scrapers.js";
+import SportsAggregator from "./services/sports-aggregator.js";
+import OddsAnalyzer from "./services/odds-analyzer.js";
+import { MultiSportAnalyzer } from "./services/multi-sport-analyzer.js";
 import { startPrefetchScheduler } from "./tasks/prefetch-scheduler.js";
 import CacheService from "./services/cache.js";
 import { AdvancedHandler } from "./advanced-handler.js";
@@ -80,6 +83,9 @@ const rssAggregator = new RSSAggregator(cache, { ttlSeconds: 60 });
 const footballDataService = new FootballDataService();
 const scorebatService = new ScoreBatService(process.env.SCOREBAT_TOKEN || null);
 const scrapers = new Scrapers(redis);
+const sportsAggregator = new SportsAggregator(redis);
+const oddsAnalyzer = new OddsAnalyzer(redis, sportsAggregator, null); // AI added later
+const multiSportAnalyzer = new MultiSportAnalyzer(redis, sportsAggregator, null); // Advanced multi-sport analysis
 
 // Composite AI wrapper: try Gemini per-request, fall back to LocalAI on errors.
 const ai = {
@@ -330,23 +336,88 @@ async function handleUpdate(update) {
       await telegram.answerCallback(callbackId, "Processing...");
 
       try {
-        const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, cache };
+        const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, sportsAggregator, oddsAnalyzer, multiSportAnalyzer, cache };
         const res = await v2Handler.handleCallbackQuery(callbackQuery, redis, services);
         if (!res) return;
 
-        // Dispatch result objects returned by v2 handler
-        if (res.method === 'editMessageText') {
-          const messageId = res.message_id || callbackQuery.message?.message_id;
-          await telegram.editMessage(chatId, messageId, res.text || '', res.reply_markup || null);
-        } else if (res.method === 'sendMessage' || res.chat_id) {
-          const target = res.chat_id || chatId;
-          await telegram.sendMessage(target, res.text || '', { reply_markup: res.reply_markup, parse_mode: res.parse_mode || 'HTML' });
-        } else if (res.method === 'answerCallback') {
-          // Some handlers may request a callback answer
-          await telegram.answerCallback(callbackId, res.text || '', res.show_alert || false);
+        // Normalize to array for uniform processing
+        const actions = Array.isArray(res) ? res : [res];
+
+        for (const action of actions) {
+          try {
+            if (!action || typeof action !== 'object') continue;
+
+            const method = (action.method || '').toString();
+
+            // Edit existing message
+            if (method === 'editMessageText' || method === 'edit' || action.edit) {
+              const messageId = action.message_id || callbackQuery.message?.message_id;
+              const text = action.text || '';
+              const reply_markup = action.reply_markup || null;
+              await telegram.editMessage(chatId, messageId, text, reply_markup);
+              logger.info('Dispatched editMessageText', { chatId, messageId });
+              continue;
+            }
+
+            // Answer callback query (quick popup)
+            if (method === 'answerCallback' || method === 'answerCallbackQuery' || action.answer) {
+              await telegram.answerCallback(callbackId, action.text || '', !!action.show_alert);
+              logger.info('Dispatched answerCallback', { callbackId });
+              continue;
+            }
+
+            // Send a new message to chat or specific chat_id
+            if (method === 'sendMessage' || action.chat_id || action.text) {
+              const target = action.chat_id || chatId;
+              const text = action.text || '';
+              const opts = { reply_markup: action.reply_markup, parse_mode: action.parse_mode || 'HTML' };
+              await telegram.sendMessage(target, text, opts);
+              logger.info('Dispatched sendMessage', { target });
+              continue;
+            }
+
+            // Unknown action: log for debugging
+            logger.warn('Unknown callback action returned by v2 handler', { action });
+          } catch (errAction) {
+            const errMsg = errAction && (errAction.message || String(errAction));
+            const benignPatterns = [
+              'message is not modified',
+              'message to edit not found',
+              'message not found',
+              'chat not found',
+              'message can\'t be edited',
+              'message cannot be edited',
+              'Bad Request: message to edit not found',
+              'Bad Request: message is not modified',
+            ];
+
+            const matched = typeof errMsg === 'string' && benignPatterns.some(p => errMsg.includes(p));
+            if (matched) {
+              const messageId = (action && (action.message_id || callbackQuery.message?.message_id)) || null;
+              logger.info('Benign Telegram API response while dispatching callback action', { chatId, messageId, reason: errMsg });
+            } else {
+              logger.error('Error dispatching callback action', errMsg);
+            }
+          }
         }
       } catch (err) {
-        logger.error('Callback handling failed', err);
+        const errMsg = err && (err.message || String(err));
+        const benignPatterns = [
+          'message is not modified',
+          'message to edit not found',
+          'message not found',
+          'chat not found',
+          'message can\'t be edited',
+          'message cannot be edited',
+          'Bad Request: message to edit not found',
+          'Bad Request: message is not modified',
+        ];
+        const matched = typeof errMsg === 'string' && benignPatterns.some(p => errMsg.includes(p));
+        if (matched) {
+          logger.info('Callback handling: benign Telegram API response (non-fatal)', { reason: errMsg });
+        } else {
+          logger.error('Callback handling failed', err);
+        }
       }
     }
   } catch (err) {
@@ -375,7 +446,7 @@ async function handleCommand(chatId, userId, cmd, args, fullText) {
     const basicCommands = {
       "/start": () => basicHandlers.start(chatId, userId),
       "/menu": async () => {
-        const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, cache };
+        const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, sportsAggregator, oddsAnalyzer, multiSportAnalyzer, cache };
         const text = '/menu';
         const msg = await v2Handler.handleCommand(text, chatId, userId, redis, services);
         if (msg && msg.chat_id) {
@@ -385,7 +456,7 @@ async function handleCommand(chatId, userId, cmd, args, fullText) {
       "/help": () => basicHandlers.help(chatId),
       "/about": () => basicHandlers.about(chatId),
       "/live": async () => {
-        const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, cache };
+        const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, sportsAggregator, oddsAnalyzer, multiSportAnalyzer, cache };
         const text = '/live';
         const msg = await v2Handler.handleCommand(text, chatId, userId, redis, services);
         if (msg && msg.chat_id) {
@@ -395,7 +466,7 @@ async function handleCommand(chatId, userId, cmd, args, fullText) {
       "/news": () => basicHandlers.news(chatId),
       "/highlights": () => basicHandlers.highlights(chatId),
       "/standings": async () => {
-        const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, cache };
+        const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, sportsAggregator, oddsAnalyzer, multiSportAnalyzer, cache };
         const text = '/standings ' + (args && args.length ? args.join(' ') : '');
         const msg = await v2Handler.handleCommand(text, chatId, userId, redis, services);
         if (msg && msg.chat_id) {
@@ -405,7 +476,7 @@ async function handleCommand(chatId, userId, cmd, args, fullText) {
       "/league": () => basicHandlers.league(chatId, args.join(" ")),
       "/predict": () => basicHandlers.predict(chatId, args.join(" ")),
       "/odds": async () => {
-        const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, cache };
+        const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, sportsAggregator, oddsAnalyzer, multiSportAnalyzer, cache };
         const text = '/odds ' + (args && args.length ? args.join(' ') : '');
         const msg = await v2Handler.handleCommand(text, chatId, userId, redis, services);
         if (msg && msg.chat_id) {

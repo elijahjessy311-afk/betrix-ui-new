@@ -28,6 +28,25 @@ const CONFIG = {
     BASE: process.env.SPORTSDATA_BASE || 'https://api.sportsdata.io',
   },
 
+  // Football-Data.org
+  FOOTBALLDATA: {
+    KEY: process.env.FOOTBALL_DATA_API || process.env.FOOTBALLDATA_API_KEY,
+    BASE: process.env.FOOTBALLDATA_BASE || 'https://api.football-data.org/v4',
+  },
+
+  // SofaScore (RapidAPI)
+  SOFASCORE: {
+    BASE: process.env.SOFASCORE_API_BASE || 'https://sofascore.p.rapidapi.com',
+    KEY: process.env.SOFASCORE_API_KEY || process.env.RAPIDAPI_KEY,
+    HOST: process.env.SOFASCORE_HOST || 'sofascore.p.rapidapi.com',
+  },
+
+  // SportsMonks
+  SPORTSMONKS: {
+    KEY: process.env.SPORTSMONKS_API || process.env.SPORTSMONKS_API_KEY,
+    BASE: process.env.SPORTSMONKS_BASE || 'https://api.sportsmonks.com/v3',
+  },
+
   // Telegram
   TELEGRAM: {
     SAFE_CHUNK: Math.max(500, Number(process.env.TELEGRAM_SAFE_CHUNK || 3000)),

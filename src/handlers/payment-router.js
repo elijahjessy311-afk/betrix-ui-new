@@ -184,10 +184,20 @@ function generateTillQRCode(till, amount, ref) {
  */
 export async function createPaymentOrder(redis, userId, tier, paymentMethod, userRegion = 'KE', metadata = {}) {
   try {
+    // Validate inputs
+    if (!paymentMethod || paymentMethod.trim() === '') {
+      throw new Error('Payment method is required');
+    }
+    if (!PAYMENT_PROVIDERS[paymentMethod]) {
+      throw new Error(`Unknown payment method: ${paymentMethod}`);
+    }
+    
     // Validate method is available for region
     const available = getAvailablePaymentMethods(userRegion);
-    if (!available.find(m => m.id === paymentMethod)) {
-      throw new Error(`${paymentMethod} not available in ${userRegion}`);
+    const isAvailable = available.find(m => m.id === paymentMethod);
+    if (!isAvailable) {
+      const availableMethods = available.map(m => m.name).join(', ');
+      throw new Error(`${paymentMethod} is not available in ${userRegion}. Available methods: ${availableMethods}`);
     }
 
     const tierPrice = getTierPrice(tier);

@@ -745,20 +745,205 @@ function handleMenuCallback(data, chatId, userId, redis) {
 
 async function handleLeagueCallback(data, chatId, userId, redis, services) {
   const leagueId = data.replace('league_', '') || null;
-  const buttons = [
-    [{ text: '🔴 Live matches', callback_data: `league_live_${leagueId}` }],
-    [{ text: '📊 Standings', callback_data: `league_standings_${leagueId}` }],
-    [{ text: '🔙 Back', callback_data: 'menu_main' }]
-  ];
+  
+  try {
+    // Get league name from mapping
+    const leagueMap = {
+      '39': 'Premier League',
+      '140': 'La Liga',
+      '135': 'Serie A',
+      '61': 'Ligue 1',
+      '78': 'Bundesliga',
+      '2': 'Champions League',
+      '3': 'Europa League'
+    };
+    const leagueName = leagueMap[leagueId] || `League ${leagueId}`;
 
-  return {
-    method: 'editMessageText',
-    chat_id: chatId,
-    message_id: undefined,
-    text: `League ${leagueId} — Choose an action:`,
-    parse_mode: 'Markdown',
-    reply_markup: { inline_keyboard: buttons }
-  };
+    return {
+      method: 'editMessageText',
+      chat_id: chatId,
+      message_id: undefined,
+      text: `📊 *${leagueName}*\n\nWhat would you like to see?`,
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '🔴 Live Now', callback_data: `league_live_${leagueId}` },
+            { text: '📈 Odds', callback_data: `league_odds_${leagueId}` }
+          ],
+          [
+            { text: '📊 Table', callback_data: `league_standings_${leagueId}` }
+          ],
+          [
+            { text: '🔙 Back', callback_data: 'menu_live' }
+          ]
+        ]
+      }
+    };
+  } catch (err) {
+    logger.error('League callback error', err);
+    return null;
+  }
+}
+
+/**
+ * Handle live matches for a league
+ */
+async function handleLeagueLiveCallback(data, chatId, userId, redis, services) {
+  const leagueId = data.replace('league_live_', '');
+  
+  try {
+    let matches = [];
+    if (services && services.sportsAggregator) {
+      try {
+        matches = await services.sportsAggregator.getLiveMatches(leagueId);
+      } catch (e) {
+        logger.warn('Failed to fetch live matches', e);
+      }
+    }
+
+    if (!matches || matches.length === 0) {
+      return {
+        method: 'editMessageText',
+        chat_id: chatId,
+        message_id: undefined,
+        text: '⏳ No live matches right now.\n\nCheck back soon!',
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[{ text: '🔙 Back', callback_data: `league_${leagueId}` }]]
+        }
+      };
+    }
+
+    // Format matches beautifully
+    const matchText = matches.slice(0, 5).map((m, i) => {
+      const score = m.homeScore !== null && m.awayScore !== null 
+        ? `${m.homeScore}-${m.awayScore}`
+        : '─';
+      const status = m.status === 'LIVE' ? `🔴 ${m.time}` : `✅ ${m.time}`;
+      return `${i+1}. ${m.home} vs ${m.away}\n   ${score} ${status}`;
+    }).join('\n\n');
+
+    return {
+      method: 'editMessageText',
+      chat_id: chatId,
+      message_id: undefined,
+      text: `🏟️ *Live Matches*\n\n${matchText}\n\n_Tap match for details_`,
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[{ text: '🔙 Back', callback_data: `league_${leagueId}` }]]
+      }
+    };
+  } catch (err) {
+    logger.error('Live matches handler error', err);
+    return null;
+  }
+}
+
+/**
+ * Handle odds for a league
+ */
+async function handleLeagueOddsCallback(data, chatId, userId, redis, services) {
+  const leagueId = data.replace('league_odds_', '');
+  
+  try {
+    let odds = [];
+    if (services && services.sportsAggregator) {
+      try {
+        odds = await services.sportsAggregator.getOdds(leagueId);
+      } catch (e) {
+        logger.warn('Failed to fetch odds', e);
+      }
+    }
+
+    if (!odds || odds.length === 0) {
+      return {
+        method: 'editMessageText',
+        chat_id: chatId,
+        message_id: undefined,
+        text: '⏳ Odds not available.\n\nCheck back soon!',
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[{ text: '🔙 Back', callback_data: `league_${leagueId}` }]]
+        }
+      };
+    }
+
+    // Format odds beautifully
+    const oddsText = odds.slice(0, 5).map((m, i) => {
+      const h = m.homeOdds || m.odds?.home || '─';
+      const d = m.drawOdds || m.odds?.draw || '─';
+      const a = m.awayOdds || m.odds?.away || '─';
+      return `${i+1}. ${m.home} vs ${m.away}\n   🏠 ${h} • 🤝 ${d} • ✈️ ${a}`;
+    }).join('\n\n');
+
+    return {
+      method: 'editMessageText',
+      chat_id: chatId,
+      message_id: undefined,
+      text: `💰 *Best Odds*\n\n${oddsText}\n\n_Compare bookmakers_`,
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[{ text: '🔙 Back', callback_data: `league_${leagueId}` }]]
+      }
+    };
+  } catch (err) {
+    logger.error('Odds handler error', err);
+    return null;
+  }
+}
+
+/**
+ * Handle standings/table for a league
+ */
+async function handleLeagueStandingsCallback(data, chatId, userId, redis, services) {
+  const leagueId = data.replace('league_standings_', '');
+  
+  try {
+    let standings = [];
+    if (services && services.sportsAggregator) {
+      try {
+        standings = await services.sportsAggregator.getStandings(leagueId);
+      } catch (e) {
+        logger.warn('Failed to fetch standings', e);
+      }
+    }
+
+    if (!standings || standings.length === 0) {
+      return {
+        method: 'editMessageText',
+        chat_id: chatId,
+        message_id: undefined,
+        text: '⏳ Standings not available.\n\nCheck back soon!',
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[{ text: '🔙 Back', callback_data: `league_${leagueId}` }]]
+        }
+      };
+    }
+
+    // Format standings beautifully (top 10)
+    const tableText = standings.slice(0, 10).map((row, i) => {
+      const pos = String(i + 1).padStart(2, ' ');
+      const team = (row.team || row.Team || row.name || '?').substring(0, 15).padEnd(15);
+      const pts = String(row.points || row.goalDifference || 0).padStart(3);
+      return `${pos}. ${team} ${pts}`;
+    }).join('\n');
+
+    return {
+      method: 'editMessageText',
+      chat_id: chatId,
+      message_id: undefined,
+      text: `📊 *League Table*\n\n\`\`\`\nPos Team           Pts\n${tableText}\n\`\`\``,
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[{ text: '🔙 Back', callback_data: `league_${leagueId}` }]]
+      }
+    };
+  } catch (err) {
+    logger.error('Standings handler error', err);
+    return null;
+  }
 }
 
 async function handleLeagueLiveCallback(data, chatId, userId, redis, services) {
@@ -806,36 +991,6 @@ async function handleLeagueLiveCallback(data, chatId, userId, redis, services) {
       chat_id: chatId,
       message_id: undefined,
       text: `Unable to fetch live matches for league ${leagueId}`,
-      parse_mode: 'Markdown'
-    };
-  }
-}
-
-async function handleLeagueStandingsCallback(data, chatId, userId, redis, services) {
-  const leagueId = data.replace('league_standings_', '');
-  try {
-    let standings = null;
-    if (services && services.apiFootball && typeof services.apiFootball.getStandings === 'function') {
-      const res = await services.apiFootball.getStandings(leagueId, new Date().getFullYear());
-      standings = res?.response?.[0] || null;
-    }
-
-    const response = formatStandings(standings, `League ${leagueId}`);
-    return {
-      method: 'editMessageText',
-      chat_id: chatId,
-      message_id: undefined,
-      text: response,
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'menu_main' }]] }
-    };
-  } catch (err) {
-    logger.warn('handleLeagueStandingsCallback failed', err);
-    return {
-      method: 'editMessageText',
-      chat_id: chatId,
-      message_id: undefined,
-      text: `Unable to fetch standings for league ${leagueId}`,
       parse_mode: 'Markdown'
     };
   }
@@ -998,32 +1153,47 @@ async function handleSportCallback(data, chatId, userId, redis, services) {
   const sportKey = data.replace('sport_', '');
   const sportName = sportKey.charAt(0).toUpperCase() + sportKey.slice(1);
 
-  // Try to fetch popular leagues for this sport
   try {
+    // Get leagues from sports aggregator or fallback to hardcoded
     let leagues = [];
-    if (services && services.apiFootball && typeof services.apiFootball.getLeagues === 'function') {
-      const res = await services.apiFootball.getLeagues(sportKey);
-      leagues = (res?.response || []).slice(0, 6).map(l => ({ id: l.league?.id || l.id, name: l.league?.name || l.name }));
+    
+    if (services && services.sportsAggregator) {
+      try {
+        const allLeagues = await services.sportsAggregator.getLeagues(sportKey);
+        leagues = allLeagues.slice(0, 8).map(l => ({
+          id: l.id || l.league?.id || l.competition?.id || '0',
+          name: l.name || l.league?.name || l.competition?.name || 'Unknown'
+        }));
+      } catch (e) {
+        logger.warn('Failed to fetch leagues from aggregator', e);
+      }
     }
 
-    // Fallback static list
+    // Fallback to popular leagues if none fetched
     if (!leagues || leagues.length === 0) {
       leagues = [
-        { id: '39', name: 'Premier League' },
-        { id: '140', name: 'La Liga' },
-        { id: '135', name: 'Serie A' },
-        { id: '61', name: 'Ligue 1' }
+        { id: '39', name: '⚽ Premier League (England)' },
+        { id: '140', name: '⚽ La Liga (Spain)' },
+        { id: '135', name: '⚽ Serie A (Italy)' },
+        { id: '61', name: '⚽ Ligue 1 (France)' },
+        { id: '78', name: '⚽ Bundesliga (Germany)' },
+        { id: '2', name: '🏆 UEFA Champions League' },
+        { id: '3', name: '🏆 UEFA Europa League' },
+        { id: '39', name: '📺 Other Leagues' }
       ];
     }
 
-    const keyboard = leagues.map(l => [{ text: `${l.name}`, callback_data: `league_${l.id}` }]);
-    keyboard.push([{ text: '🔙 Back', callback_data: 'menu_main' }]);
+    const keyboard = leagues.map(l => [{
+      text: l.name.includes('⚽') || l.name.includes('🏆') ? l.name : `⚽ ${l.name}`,
+      callback_data: `league_${l.id}`
+    }]);
+    keyboard.push([{ text: '🔙 Back to Sports', callback_data: 'menu_live' }]);
 
     return {
       method: 'editMessageText',
       chat_id: chatId,
       message_id: undefined,
-      text: `*${sportName}* — Select a league to view live matches and standings:`,
+      text: `🏟️ *${sportName}* - Select a league\n\nChoose your favorite league to see live matches, odds, and standings.`,
       parse_mode: 'Markdown',
       reply_markup: { inline_keyboard: keyboard }
     };
@@ -1033,7 +1203,7 @@ async function handleSportCallback(data, chatId, userId, redis, services) {
       method: 'editMessageText',
       chat_id: chatId,
       message_id: undefined,
-      text: `Loading ${sportName} data...`,
+      text: `Loading ${sportName} leagues...`,
       parse_mode: 'Markdown'
     };
   }
@@ -1079,11 +1249,22 @@ async function handleSubscriptionCallback(data, chatId, userId, redis, services)
       const userRegion = await redis.hget(`user:${userId}:profile`, 'region') || 'KE';
       
       // Get available payment methods for region
-      const paymentMethods = getAvailablePaymentMethods(userRegion);
+      const paymentMethodObjects = getAvailablePaymentMethods(userRegion);
+      const paymentMethodIds = paymentMethodObjects.map(m => m.id);
+      
+      // Handle case where no payment methods are available
+      if (!paymentMethodIds || paymentMethodIds.length === 0) {
+        return {
+          method: 'answerCallbackQuery',
+          callback_query_id: undefined,
+          text: `❌ No payment methods available in your region (${userRegion}). Please contact support.`,
+          show_alert: true
+        };
+      }
 
       // Persist selected tier for this user for 15 minutes so payment callbacks can reference it
       try {
-        await redis.setex(`user:${userId}:pending_payment`, 900, JSON.stringify({ tier, createdAt: Date.now() }));
+        await redis.setex(`user:${userId}:pending_payment`, 900, JSON.stringify({ tier, region: userRegion, createdAt: Date.now() }));
       } catch (e) {
         logger.warn('Failed to persist pending payment', e);
       }
@@ -1094,7 +1275,7 @@ async function handleSubscriptionCallback(data, chatId, userId, redis, services)
         text: `🌀 *${tierConfig.name}* - KES ${tierConfig.price}/month\n\n✨ *Features:*\n${tierConfig.features.map(f => `• ${f}`).join('\n')}\n\n*Select payment method:*`,
         parse_mode: 'Markdown',
         reply_markup: {
-          inline_keyboard: buildPaymentMethodButtons(paymentMethods, tier)
+          inline_keyboard: buildPaymentMethodButtons(paymentMethodIds, tier)
         }
       };
     }
@@ -1137,12 +1318,15 @@ async function handleSubscriptionCallback(data, chatId, userId, redis, services)
 
 /**
  * Build payment method buttons based on available methods
+ * methodIds: array of method ID strings like ['SAFARICOM_TILL', 'MPESA', 'BINANCE']
  */
-function buildPaymentMethodButtons(methods, tier) {
+function buildPaymentMethodButtons(methodIds, tier) {
   const buttons = [];
   
+  if (!methodIds || methodIds.length === 0) return buttons;
+  
   // Safaricom Till (high priority for KE)
-  if (methods.includes('SAFARICOM_TILL')) {
+  if (methodIds.includes('SAFARICOM_TILL')) {
     const TILL_NUMBER = process.env.MPESA_TILL || process.env.SAFARICOM_TILL_NUMBER || '606215';
     buttons.push([{
       text: `🏪 Safaricom Till #${TILL_NUMBER} (Recommended)`,
@@ -1151,7 +1335,7 @@ function buildPaymentMethodButtons(methods, tier) {
   }
   
   // M-Pesa
-  if (methods.includes('MPESA')) {
+  if (methodIds.includes('MPESA')) {
     buttons.push([{
       text: '📱 M-Pesa STK Push',
       callback_data: `pay_mpesa_${tier}`
@@ -1159,7 +1343,7 @@ function buildPaymentMethodButtons(methods, tier) {
   }
   
   // PayPal
-  if (methods.includes('PAYPAL')) {
+  if (methodIds.includes('PAYPAL')) {
     buttons.push([{
       text: '💳 PayPal',
       callback_data: `pay_paypal_${tier}`
@@ -1167,7 +1351,7 @@ function buildPaymentMethodButtons(methods, tier) {
   }
   
   // Binance
-  if (methods.includes('BINANCE')) {
+  if (methodIds.includes('BINANCE')) {
     buttons.push([{
       text: '₿ Binance Pay',
       callback_data: `pay_binance_${tier}`
@@ -1175,7 +1359,7 @@ function buildPaymentMethodButtons(methods, tier) {
   }
   
   // SWIFT
-  if (methods.includes('SWIFT')) {
+  if (methodIds.includes('SWIFT')) {
     buttons.push([{
       text: '🏦 Bank Transfer (SWIFT)',
       callback_data: `pay_swift_${tier}`
@@ -1377,32 +1561,69 @@ We're here to help! Reach out:
 async function handlePaymentMethodSelection(data, chatId, userId, redis, services) {
   try {
     const parts = data.split('_');
-    // Format: pay_METHOD or pay_METHOD_TIER
-    const paymentMethod = parts.slice(1, -1).join('_').toUpperCase();
-    const tier = parts[parts.length - 1].toUpperCase();
-
-    // If tier is not provided in the callback (older buttons), try to read pending tier
-    let selectedTier = tier;
-    if (!selectedTier || selectedTier === '') {
-      try {
-        const pending = await redis.get(`user:${userId}:pending_payment`);
-        if (pending) {
-          const pendingObj = JSON.parse(pending);
-          selectedTier = pendingObj.tier || selectedTier;
-        }
-      } catch (e) {
-        logger.warn('Failed to read pending tier from redis', e);
-      }
-    }
-
-    const userRegion = await redis.hget(`user:${userId}:profile`, 'region') || 'KE';
-    
-    // Validate region
-    if (paymentMethod === 'SAFARICOM_TILL' && userRegion !== 'KE') {
+    // Format: pay_METHOD_TIER (e.g., pay_mpesa_vvip, pay_safaricom_till_pro)
+    if (parts.length < 3) {
+      logger.error('Invalid payment callback format', { data, parts });
       return {
         method: 'answerCallbackQuery',
         callback_query_id: undefined,
-        text: '🇰🇪 Safaricom Till only available in Kenya',
+        text: '❌ Invalid payment selection. Please try again.',
+        show_alert: true
+      };
+    }
+    
+    const tier = parts[parts.length - 1].toUpperCase();
+    const paymentMethod = parts.slice(1, -1).join('_').toUpperCase();
+    
+    // Validate tier
+    if (!TIERS[tier]) {
+      logger.error('Invalid tier in payment callback', { data, tier });
+      return {
+        method: 'answerCallbackQuery',
+        callback_query_id: undefined,
+        text: '❌ Invalid tier. Please try again.',
+        show_alert: true
+      };
+    }
+    
+    // Validate payment method exists in PAYMENT_PROVIDERS
+    if (!PAYMENT_PROVIDERS[paymentMethod]) {
+      logger.error('Unknown payment method', { data, paymentMethod });
+      return {
+        method: 'answerCallbackQuery',
+        callback_query_id: undefined,
+        text: `❌ Payment method '${paymentMethod}' not recognized. Please try again.`,
+        show_alert: true
+      };
+    }
+
+    // Read region from pending payment record (set when tier was selected) or from user profile
+    let userRegion = 'KE';
+    try {
+      const pending = await redis.get(`user:${userId}:pending_payment`);
+      if (pending) {
+        const pendingObj = JSON.parse(pending);
+        userRegion = pendingObj.region || userRegion;
+      }
+    } catch (e) {
+      logger.warn('Failed to read pending region from redis', e);
+    }
+    
+    // Fallback to profile region
+    if (userRegion === 'KE') {
+      const profileRegion = await redis.hget(`user:${userId}:profile`, 'region').catch(() => null);
+      if (profileRegion) userRegion = profileRegion;
+    }
+
+    // Validate payment method is available for user's region
+    const available = getAvailablePaymentMethods(userRegion);
+    if (!available.find(m => m.id === paymentMethod)) {
+      const availableNames = available.map(m => m.name).join(', ');
+      logger.warn('Payment method not available for region', { paymentMethod, userRegion, available: availableNames });
+      return {
+        method: 'answerCallbackQuery',
+        callback_query_id: undefined,
+        text: `❌ ${paymentMethod} is not available in ${userRegion}. Available: ${availableNames}`,
         show_alert: true
       };
     }
@@ -1411,7 +1632,7 @@ async function handlePaymentMethodSelection(data, chatId, userId, redis, service
     const order = await createPaymentOrder(
       redis,
       userId,
-      selectedTier,
+      tier,
       paymentMethod,
       userRegion
     );
