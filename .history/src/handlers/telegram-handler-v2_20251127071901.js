@@ -219,7 +219,7 @@ async function handleCommand(text, chatId, userId, redis, services) {
     case '/start': {
       // personalized welcome: check if user has profile
       try {
-        const userProfile = await safeGetUserData(redis, `user:${userId}`) || {};
+        const userProfile = await redis.hgetall(`user:${userId}`) || {};
         // if no name or profile fields, treat as new user
         if (!userProfile || Object.keys(userProfile).length === 0 || !userProfile.name) {
           const welcome = (typeof (await import('./menu-handler.js')).welcomeNewUser === 'function')
@@ -683,19 +683,19 @@ async function handleNews(chatId, userId, redis, services, query = {}) {
  */
 async function handleProfile(chatId, userId, redis, services) {
   try {
-    const user = await safeGetUserData(redis, `user:${userId}`);
+    const user = await redis.hgetall(`user:${userId}`);
     const subscription = await getUserSubscription(redis, userId);
 
     const profileData = {
-      name: (user && user.name) || 'BETRIX User',
+      name: user.name || 'BETRIX User',
       tier: subscription.tier,
-      joinDate: (user && user.joinDate) || new Date().toLocaleDateString(),
-      predictions: (user && user.predictions) || 0,
-      winRate: (user && user.winRate) || 0,
-      points: (user && user.points) || 0,
+      joinDate: user.joinDate || new Date().toLocaleDateString(),
+      predictions: user.predictions || 0,
+      winRate: user.winRate || 0,
+      points: user.points || 0,
       referralCode: userId.toString(36).toUpperCase(),
-      referrals: (user && user.referrals) || 0,
-      bonusPoints: (user && user.bonusPoints) || 0,
+      referrals: user.referrals || 0,
+      bonusPoints: user.bonusPoints || 0,
       nextTier: subscription.tier === 'FREE' ? 'PRO' : 'VVIP'
     };
 
@@ -1655,8 +1655,8 @@ async function handleSignupCountry(data, chatId, userId, redis, services) {
     const state = { step: 'confirm' };
     await redis.setex(`user:${userId}:onboarding`, 1800, JSON.stringify(state));
 
-    const user = await safeGetUserData(redis, `user:${userId}`) || {};
-    const profile = await safeGetUserData(redis, `user:${userId}:profile`) || {};
+    const user = await redis.hgetall(`user:${userId}`) || {};
+    const profile = await redis.hgetall(`user:${userId}:profile`) || {};
 
     const name = user.name || 'New User';
     const age = user.age || 'N/A';
@@ -1681,7 +1681,6 @@ async function handleSignupCountry(data, chatId, userId, redis, services) {
     logger.error('handleSignupCountry failed', e);
     return { method: 'sendMessage', chat_id: chatId, text: 'Failed to select country. Try again.' };
   }
-}
 }
 
 /**
@@ -1955,7 +1954,7 @@ function buildPaymentMethodButtons(methodIds, tier) {
 async function handleProfileCallback(data, chatId, userId, redis) {
   try {
     if (data === 'profile_stats') {
-      const user = await safeGetUserData(redis, `user:${userId}`) || {};
+      const user = await redis.hgetall(`user:${userId}`) || {};
       const sub = await getUserSubscription(redis, userId);
       
       return {
@@ -1963,11 +1962,11 @@ async function handleProfileCallback(data, chatId, userId, redis) {
         chat_id: chatId,
         message_id: undefined,
         text: formatProfile({
-          name: (user && user.name) || 'BETRIX User',
+          name: user.name || 'BETRIX User',
           tier: sub.tier || 'FREE',
-          joinDate: (user && user.joinDate) || new Date().toLocaleDateString(),
-          predictions: (user && user.predictions) || 0,
-          winRate: (user && user.winRate) || '0',
+          joinDate: user.joinDate || new Date().toLocaleDateString(),
+          predictions: user.predictions || 0,
+          winRate: user.winRate || '0',
           points: user.points || 0,
           referralCode: user.referralCode || `USER${userId}`,
           referrals: user.referrals || 0,
