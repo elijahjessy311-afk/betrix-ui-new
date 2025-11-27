@@ -667,8 +667,6 @@ function getTierPrice(tier, paymentMethod = 'PAYPAL') {
   return tierObj.USD;
 }
 
-export { getTierPrice };
-
 /**
  * Return available VVIP/fixed packages metadata
  */
