@@ -596,19 +596,12 @@ export async function verifyAndActivatePayment(redis, orderId, transactionId) {
     orderData.completedAt = new Date().toISOString();
 
     // Activate user subscription
-    if (tier === 'SIGNUP') {
-      // One-time signup fee: grant analysis access without changing main tier
-      await redis.hset(`user:${userId}`, 'signupPaid', '1');
-      await redis.hset(`user:${userId}`, 'analysisAccessUntil', new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString());
-      // Do not overwrite existing tier; keep user's tier (default FREE)
-    } else {
-      await redis.hset(`user:${userId}`, 'tier', tier);
-      await redis.hset(
-        `user:${userId}`,
-        'subscriptionExpiry',
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-      );
-    }
+    await redis.hset(`user:${userId}`, 'tier', tier);
+    await redis.hset(
+      `user:${userId}`,
+      'subscriptionExpiry',
+      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    );
 
     // Store transaction
     await redis.setex(

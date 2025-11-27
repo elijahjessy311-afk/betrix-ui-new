@@ -29,12 +29,8 @@ Your AI-powered sports betting companion. Get live odds, predictions, and analys
         { text: '📰 Latest News', callback_data: 'menu_news' }
       ],
       [
-        { text: '⭐ Favorites', callback_data: 'profile_favorites' },
-        { text: '👤 My Profile', callback_data: 'menu_profile' }
-      ],
-      [
         { text: '💰 Subscribe to VVIP', callback_data: 'menu_vvip' },
-        { text: '📝 Sign Up', callback_data: 'signup_start' }
+        { text: '👤 My Profile', callback_data: 'menu_profile' }
       ],
       [
         { text: '❓ Help', callback_data: 'menu_help' }
@@ -42,32 +38,6 @@ Your AI-powered sports betting companion. Get live odds, predictions, and analys
     ]
   }
 };
-
-
-// Add a Sign Up quick action to be used by handlers if needed
-export const signUpAction = { text: '📝 Sign Up', callback_data: 'signup_start' };
-
-/**
- * Welcome message for new users (pre-signup)
- */
-export function welcomeNewUser() {
-  return `${BETRIX_HEADER}
-
-Welcome to BETRIX — your AI sports analyst.\n\n` +
-    `▶️ *Quick Start:* Tap ⚽ Live Games to pick a sport, or ⭐ Favorites to add teams you care about.\n\n` +
-    `🔒 Want more insights? Upgrade to VVIP for unlimited AI analysis and real-time alerts.\n\n` +
-    `Tap *Subscribe to VVIP* or type /vvip to get started.`;
-}
-
-/**
- * Welcome message for returning or signed-up users
- */
-export function welcomeReturningUser(user) {
-  const name = (user && user.name) ? user.name : 'BETRIX User';
-  const tier = (user && user.tier) ? user.tier : 'FREE';
-  return `${BETRIX_HEADER}\n\nWelcome back, *${name}*! (${tier})\n\n` +
-    `• Tap ⚽ Live Games to view live matches\n• Tap 📊 Odds & Analysis for predictions\n• Tap ⭐ Favorites to view your tracked teams\n\nGood luck — bet responsibly!`;
-}
 
 export const sportsMenu = {
   text: `${BETRIX_HEADER}
@@ -118,11 +88,6 @@ export const subscriptionMenu = {
 • VVIP: KES 2,699/month
 • *BETRIX Plus Bundle:* KES 8,999/month
 
-*Fixed-odds Packs:*
-• Fixed Bronze (5 tips): KES 499/month
-• Fixed Silver (15 tips): KES 1,299/month
-• Fixed Gold (50 tips): KES 4,499/month
-
 *Payment Options:*
 🏪 Pay via Safaricom Till #${TILL_NUMBER} (Instant)
 📱 M-Pesa (STK Push)
@@ -145,10 +110,6 @@ export const subscriptionMenu = {
       [
         { text: '🚀 Quick VVIP (Till)', callback_data: 'pay_quick_vvip' },
         { text: '🔙 Back', callback_data: 'menu_main' }
-      ],
-      [
-        { text: '👑 Fixed Matches (VVIP)', callback_data: 'vvip_fixed' },
-        { text: '🔍 Half/Full & Correct Scores', callback_data: 'vvip_advanced' }
       ],
       [
         { text: `🏪 Safaricom Till #${TILL_NUMBER}`, callback_data: 'pay_till' },
@@ -239,19 +200,20 @@ export function formatLiveGames(games, sport = 'Football') {
 
 Check back later for exciting matchups! ⚽`;
   }
-  let text = `${BETRIX_HEADER}\n\n*🔴 LIVE ${sport.toUpperCase()} MATCHES*\n`;
 
+  let text = `${BETRIX_HEADER}
+
+*🔴 LIVE ${sport.toUpperCase()} MATCHES*\n`;
+  
   games.slice(0, 10).forEach((game, i) => {
-    text += `\n${i + 1}. *${game.home}* vs *${game.away}*`;
-    if (game.score) text += `\n   • Score: ${game.score}`;
-    if (game.time) text += `\n   • ⏱ ${game.time}`;
-    if (game.odds) text += `\n   • 📊 Odds: ${game.odds}`;
-    text += `\n   — Tap Details to analyze or ⭐ to add to Favorites`;
+    text += `\n${i + 1}. *${game.home} vs ${game.away}*`;
+    if (game.score) text += `\n   Score: ${game.score}`;
+    if (game.time) text += `\n   ⏱ ${game.time}`;
+    if (game.odds) text += `\n   📊 Odds: ${game.odds}`;
   });
 
-  text += `\n\n✨ *Tip:* Use the *Details* button to get match stats, odds, and instant analysis.`;
-  text += `\n\n_Powered by BETRIX Intelligence_`;
-
+  text += `\n\n_Get detailed analysis by selecting a match above_ ⬆️`;
+  
   return text;
 }
 
@@ -264,18 +226,20 @@ export function formatOdds(matches) {
 
 *No odds available at the moment.*`;
   }
-  let text = `${BETRIX_HEADER}\n\n*📊 LIVE ODDS & PREDICTIONS*\n`;
 
+  let text = `${BETRIX_HEADER}
+
+*📊 LIVE ODDS & PREDICTIONS*\n`;
+  
   matches.slice(0, 8).forEach((m, i) => {
-    text += `\n${i + 1}. *${m.home}* vs *${m.away}*`;
-    text += `\n   • 💰 Home: ${m.homeOdds}  •  Draw: ${m.drawOdds}  •  Away: ${m.awayOdds}`;
-    if (m.prediction) text += `\n   • 🤖 Prediction: ${m.prediction}`;
-    if (m.value) text += `\n   • ⭐ Value Bet: ${m.value}`;
-    text += `\n   — Tap a match to analyze or add to Favorites`;
+    text += `\n${i + 1}. *${m.home} vs ${m.away}*`;
+    text += `\n   💰 Win: ${m.homeOdds} | Draw: ${m.drawOdds} | Away: ${m.awayOdds}`;
+    if (m.prediction) text += `\n   🤖 Prediction: ${m.prediction}`;
+    if (m.value) text += `\n   ⭐ Value: ${m.value}`;
   });
 
-  text += `\n\n✨ *Unlock advanced odds analysis with VVIP — tap Subscribe to upgrade.*`;
-
+  text += `\n\n✨ *Unlock advanced odds analysis with VVIP!*`;
+  
   return text;
 }
 
@@ -288,15 +252,18 @@ export function formatStandings(league, standings) {
 
 *No standings data available.*`;
   }
-  let text = `${BETRIX_HEADER}\n\n*🏆 ${league.toUpperCase()} STANDINGS*\n`;
+
+  let text = `${BETRIX_HEADER}
+
+*🏆 ${league.toUpperCase()} STANDINGS*\n`;
   text += '```\nPos Team              P   W   D   L   +/-  Pts\n';
-
+  
   standings.slice(0, 12).forEach((team, i) => {
-    text += `${String(i + 1).padEnd(3)}${team.name.substring(0, 16).padEnd(18)}${String(team.played).padStart(3)}   ${String(team.won).padStart(2)}   ${String(team.drawn).padStart(2)}   ${String(team.lost).padStart(2)}   ${String(team.goalDiff).padStart(3)}  ${String(team.points).padStart(3)}\n`;
+    text += `${String(i + 1).padEnd(3)}${team.name.substring(0, 16).padEnd(18)}${team.played}   ${team.won}   ${team.drawn}   ${team.lost}   ${team.goalDiff}  ${team.points}\n`;
   });
-
-  text += '```\n_Powered by BETRIX Live Data_';
-
+  
+  text += '```\n_BETRIX Live Data_';
+  
   return text;
 }
 

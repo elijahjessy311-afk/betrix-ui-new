@@ -5,7 +5,6 @@
 
 import { Logger } from '../utils/logger.js';
 import { getUserSubscription } from './payment-handler.js';
-import { getAvailablePaymentMethods, PAYMENT_PROVIDERS, verifyPaymentFromMessage, getAvailablePackages } from './payment-router.js';
 import {
   mainMenu,
   sportsMenu,
@@ -113,37 +112,6 @@ export async function handleMessage(update, redis, services) {
     const chatId = message.chat.id;
     const userId = message.from.id;
     const text = message.text || '';
-
-    // Check if user is in onboarding flow
-    try {
-      const onboardingRaw = await redis.get(`user:${userId}:onboarding`);
-      if (onboardingRaw) {
-        return handleOnboardingMessage(text, chatId, userId, redis, services);
-      }
-    } catch (e) {
-      logger.warn('Failed to read onboarding state', e);
-    }
-
-    // If user has a pending payment order, allow them to paste transaction text to confirm payment
-    try {
-      const pendingOrderId = await redis.get(`payment:by_user:${userId}:pending`);
-      if (pendingOrderId && text && !text.startsWith('/')) {
-        // Heuristic: user pasted a transaction message if it contains Ksh/KES/Ref/Transaction or looks like an alphanumeric tx id
-        const txHint = /\b(Ksh|KES|Ref(erence)?|Transaction|Receipt|Trx|MPESA|M-Pesa)\b/i;
-        if (txHint.test(text) || /[A-Z0-9]{6,}/i.test(text)) {
-          try {
-            const result = await verifyPaymentFromMessage(redis, userId, text);
-            // result contains success info from verifyAndActivatePayment
-            return { method: 'sendMessage', chat_id: chatId, text: result.message || 'Payment confirmed. Your subscription is active.', parse_mode: 'Markdown' };
-          } catch (e) {
-            // If parsing failed, let the message continue to NLP or notify user
-            return { method: 'sendMessage', chat_id: chatId, text: `❌ Payment verification failed: ${e.message}.\nPlease ensure you pasted the full transaction message including reference and amount.`, parse_mode: 'Markdown' };
-          }
-        }
-      }
-    } catch (e) {
-      logger.warn('Failed to check pending payment for user', e);
-    }
 
     // Store user session
     await redis.setex(`user:${userId}:last_seen`, 86400, Date.now());
@@ -654,10 +622,6 @@ export async function handleCallbackQuery(callbackQuery, redis, services) {
       return handleMenuCallback(data, chatId, userId, redis);
     }
 
-    if (data === 'signup_start') {
-      return startOnboarding(chatId, userId, redis);
-    }
-
     if (data.startsWith('sport_')) {
       return handleSportCallback(data, chatId, userId, redis, services);
     }
@@ -704,14 +668,6 @@ export async function handleCallbackQuery(callbackQuery, redis, services) {
 
     if (data.startsWith('fav_view_')) {
       return handleFavoriteView(data, chatId, userId, redis, services);
-    }
-    // signup country selection
-    if (data.startsWith('signup_country_')) {
-      return handleSignupCountry(data, chatId, userId, redis, services);
-    }
-
-    if (data.startsWith('signup_pay_')) {
-      return handleSignupPaymentCallback(data, chatId, userId, redis, services);
     }
 
     if (data.startsWith('fav_')) {
@@ -1454,148 +1410,6 @@ async function handleSetBetStake(data, chatId, userId, redis) {
   } catch (err) {
     logger.error('handleSetBetStake error', err);
     return { method: 'sendMessage', chat_id: chatId, text: '❌ Error setting stake.', parse_mode: 'Markdown' };
-  }
-}
-
-/**
- * Start onboarding flow for new user
- */
-async function startOnboarding(chatId, userId, redis) {
-  try {
-    // seed onboarding state
-    const state = { step: 'name', createdAt: Date.now() };
-    await redis.setex(`user:${userId}:onboarding`, 1800, JSON.stringify(state));
-    return {
-      method: 'sendMessage',
-      chat_id: chatId,
-      text: '📝 Welcome to BETRIX! Let\'s set up your account. What is your full name?\n\n_Reply with your full name to continue._',
-      parse_mode: 'Markdown'
-    };
-  } catch (e) {
-    logger.error('startOnboarding failed', e);
-    return { method: 'sendMessage', chat_id: chatId, text: 'Failed to start signup. Try again later.' };
-  }
-}
-
-/**
- * Handle onboarding messages (name, age, country)
- */
-async function handleOnboardingMessage(text, chatId, userId, redis, services) {
-  try {
-    const raw = await redis.get(`user:${userId}:onboarding`);
-    if (!raw) return null;
-    const state = JSON.parse(raw);
-
-    if (state.step === 'name') {
-      const name = String(text || '').trim();
-      if (!name || name.length < 2) {
-        return { method: 'sendMessage', chat_id: chatId, text: 'Please send a valid full name (at least 2 characters).' };
-      }
-      await redis.hset(`user:${userId}`, 'name', name);
-      state.step = 'age';
-      await redis.setex(`user:${userId}:onboarding`, 1800, JSON.stringify(state));
-      return { method: 'sendMessage', chat_id: chatId, text: `Thanks *${name}*! How old are you?`, parse_mode: 'Markdown' };
-    }
-
-    if (state.step === 'age') {
-      const age = parseInt((text || '').replace(/\D/g, ''), 10);
-      if (!age || age < 13) {
-        return { method: 'sendMessage', chat_id: chatId, text: 'Please enter a valid age (13+).' };
-      }
-      await redis.hset(`user:${userId}`, 'age', String(age));
-      state.step = 'country';
-      await redis.setex(`user:${userId}:onboarding`, 1800, JSON.stringify(state));
-
-      // present country options
-      const keyboard = [
-        [ { text: '🇰🇪 Kenya', callback_data: 'signup_country_KE' }, { text: '🇳🇬 Nigeria', callback_data: 'signup_country_NG' } ],
-        [ { text: '🇺🇸 USA', callback_data: 'signup_country_US' }, { text: '🇬🇧 UK', callback_data: 'signup_country_UK' } ],
-        [ { text: '🌍 Other', callback_data: 'signup_country_OTHER' } ]
-      ];
-
-      return { method: 'sendMessage', chat_id: chatId, text: 'Great — which country are you in? (choose below)', parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } };
-    }
-
-    // default fallback
-    return { method: 'sendMessage', chat_id: chatId, text: 'Onboarding in progress. Please follow the instructions.' };
-  } catch (e) {
-    logger.error('handleOnboardingMessage failed', e);
-    return { method: 'sendMessage', chat_id: chatId, text: 'Signup failed. Please try again.' };
-  }
-}
-
-/**
- * Handle signup country callback
- */
-async function handleSignupCountry(data, chatId, userId, redis, services) {
-  try {
-    const code = data.replace('signup_country_', '') || 'OTHER';
-    await redis.hset(`user:${userId}:profile`, 'region', code);
-    // mark onboarding to confirm
-    const state = { step: 'confirm' };
-    await redis.setex(`user:${userId}:onboarding`, 1800, JSON.stringify(state));
-
-    const user = await redis.hgetall(`user:${userId}`) || {};
-    const profile = await redis.hgetall(`user:${userId}:profile`) || {};
-
-    const name = user.name || 'New User';
-    const age = user.age || 'N/A';
-    const region = profile.region || code;
-
-    // compute signup fee suggestion based on region
-    // Updated signup fee: KES 150 (~1 USD) for Kenya, USD 1 for others by default
-    const feeMap = { KE: 150, NG: 500, US: 1, UK: 1, OTHER: 1 };
-    const amount = feeMap[region] || feeMap.OTHER;
-
-    // choose suggested payment methods for region
-    const methods = getAvailablePaymentMethods(region).map(m => m.id);
-
-    // Build payment buttons for signup (signup_pay_{method}_{amount})
-    const keyboard = methods.map(mid => ([{ text: `${PAYMENT_PROVIDERS[mid]?.symbol || ''} ${PAYMENT_PROVIDERS[mid]?.name || mid}`, callback_data: `signup_pay_${mid}_${amount}` }]));
-    keyboard.push([{ text: '🔙 Cancel', callback_data: 'menu_main' }]);
-
-    const text = `✅ Please confirm your details:\nName: *${name}*\nAge: *${age}*\nCountry: *${region}*\n\nTo complete signup, a one-time fee of *${amount}* will be charged based on your region. Choose a payment method below:`;
-
-    return { method: 'sendMessage', chat_id: chatId, text, parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } };
-  } catch (e) {
-    logger.error('handleSignupCountry failed', e);
-    return { method: 'sendMessage', chat_id: chatId, text: 'Failed to select country. Try again.' };
-  }
-}
-
-/**
- * Handle signup payment callback: signup_pay_{METHOD}_{AMOUNT}
- */
-async function handleSignupPaymentCallback(data, chatId, userId, redis, services) {
-  try {
-    const parts = data.split('_');
-    // parts: ['signup','pay','METHOD','AMOUNT']
-    const method = parts[2];
-    const amount = Number(parts[3] || 0);
-    const profile = await redis.hgetall(`user:${userId}:profile`) || {};
-    const region = profile.region || 'KE';
-
-    // create custom payment order
-    const { createCustomPaymentOrder, getPaymentInstructions } = await import('./payment-router.js');
-    const order = await createCustomPaymentOrder(redis, userId, amount, method, region, { signup: true });
-    const instructions = await getPaymentInstructions(redis, order.orderId, method).catch(() => null);
-
-    let instrText = `Please complete payment for order *${order.orderId}*\nAmount: ${order.totalAmount} ${order.currency}\n`;
-    if (instructions && instructions.description) instrText += `\n${instructions.description}\n`;
-    if (instructions && instructions.manualSteps) instrText += `\nSteps:\n${instructions.manualSteps.join('\n')}`;
-    if (instructions && instructions.checkoutUrl) instrText += `\nOpen: ${instructions.checkoutUrl}`;
-
-    const keyboard = [];
-    if (instructions && instructions.checkoutUrl) keyboard.push([{ text: '🔗 Open Payment Link', url: instructions.checkoutUrl }]);
-    keyboard.push([{ text: '✅ I Paid', callback_data: `verify_payment_${order.orderId}` }]);
-    // Add a quick instruction to paste the transaction message here for automatic verification
-    instrText += `\n\n*Tip:* After paying, you can paste the full transaction confirmation message you receive (e.g. M-Pesa confirmation) into this chat and BETRIX will try to confirm it automatically.`;
-    keyboard.push([{ text: '🔙 Main Menu', callback_data: 'menu_main' }]);
-
-    return { method: 'sendMessage', chat_id: chatId, text: instrText, parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } };
-  } catch (e) {
-    logger.error('handleSignupPaymentCallback failed', e);
-    return { method: 'sendMessage', chat_id: chatId, text: `Failed to create signup payment: ${e.message}` };
   }
 }
 

@@ -4,8 +4,6 @@
  */
 
 import { Logger } from '../utils/logger.js';
-import { getUserSubscription } from './payment-handler.js';
-import { getAvailablePaymentMethods, PAYMENT_PROVIDERS, verifyPaymentFromMessage, getAvailablePackages } from './payment-router.js';
 import {
   mainMenu,
   sportsMenu,
@@ -114,37 +112,6 @@ export async function handleMessage(update, redis, services) {
     const userId = message.from.id;
     const text = message.text || '';
 
-    // Check if user is in onboarding flow
-    try {
-      const onboardingRaw = await redis.get(`user:${userId}:onboarding`);
-      if (onboardingRaw) {
-        return handleOnboardingMessage(text, chatId, userId, redis, services);
-      }
-    } catch (e) {
-      logger.warn('Failed to read onboarding state', e);
-    }
-
-    // If user has a pending payment order, allow them to paste transaction text to confirm payment
-    try {
-      const pendingOrderId = await redis.get(`payment:by_user:${userId}:pending`);
-      if (pendingOrderId && text && !text.startsWith('/')) {
-        // Heuristic: user pasted a transaction message if it contains Ksh/KES/Ref/Transaction or looks like an alphanumeric tx id
-        const txHint = /\b(Ksh|KES|Ref(erence)?|Transaction|Receipt|Trx|MPESA|M-Pesa)\b/i;
-        if (txHint.test(text) || /[A-Z0-9]{6,}/i.test(text)) {
-          try {
-            const result = await verifyPaymentFromMessage(redis, userId, text);
-            // result contains success info from verifyAndActivatePayment
-            return { method: 'sendMessage', chat_id: chatId, text: result.message || 'Payment confirmed. Your subscription is active.', parse_mode: 'Markdown' };
-          } catch (e) {
-            // If parsing failed, let the message continue to NLP or notify user
-            return { method: 'sendMessage', chat_id: chatId, text: `❌ Payment verification failed: ${e.message}.\nPlease ensure you pasted the full transaction message including reference and amount.`, parse_mode: 'Markdown' };
-          }
-        }
-      }
-    } catch (e) {
-      logger.warn('Failed to check pending payment for user', e);
-    }
-
     // Store user session
     await redis.setex(`user:${userId}:last_seen`, 86400, Date.now());
 
@@ -213,14 +180,7 @@ async function handleCommand(text, chatId, userId, redis, services) {
     }
 
     case '/live':
-      // Show sport selection first to allow categorization
-      try {
-        const mh = await import('./menu-handler.js');
-        return { chat_id: chatId, text: mh.sportsMenu.text, reply_markup: mh.sportsMenu.reply_markup, parse_mode: 'Markdown' };
-      } catch (e) {
-        logger.warn('Failed to load sports menu, falling back to live list', e);
-        return handleLiveGames(chatId, userId, redis, services);
-      }
+      return handleLiveGames(chatId, userId, redis, services);
 
     case '/odds':
       return handleOdds(chatId, userId, redis, services);
@@ -654,24 +614,12 @@ export async function handleCallbackQuery(callbackQuery, redis, services) {
       return handleMenuCallback(data, chatId, userId, redis);
     }
 
-    if (data === 'signup_start') {
-      return startOnboarding(chatId, userId, redis);
-    }
-
     if (data.startsWith('sport_')) {
       return handleSportCallback(data, chatId, userId, redis, services);
     }
 
     if (data.startsWith('sub_')) {
       return handleSubscriptionCallback(data, chatId, userId, redis, services);
-    }
-
-    if (data === 'vvip_fixed') {
-      return handleVvipFixedMatches(chatId, userId, redis, services);
-    }
-
-    if (data === 'vvip_advanced') {
-      return handleVvipAdvancedInfo(chatId, userId, redis, services);
     }
 
     if (data.startsWith('profile_')) {
@@ -690,28 +638,8 @@ export async function handleCallbackQuery(callbackQuery, redis, services) {
       return handleLeagueLiveCallback(data, chatId, userId, redis, services);
     }
 
-    if (data.startsWith('match_')) {
-      return handleMatchCallback(data, chatId, userId, redis, services);
-    }
-
-    if (data.startsWith('analyze_match_')) {
-      return handleAnalyzeMatch(data, chatId, userId, redis, services);
-    }
-
     if (data.startsWith('league_standings_')) {
       return handleLeagueStandingsCallback(data, chatId, userId, redis, services);
-    }
-
-    if (data.startsWith('fav_view_')) {
-      return handleFavoriteView(data, chatId, userId, redis, services);
-    }
-    // signup country selection
-    if (data.startsWith('signup_country_')) {
-      return handleSignupCountry(data, chatId, userId, redis, services);
-    }
-
-    if (data.startsWith('signup_pay_')) {
-      return handleSignupPaymentCallback(data, chatId, userId, redis, services);
     }
 
     if (data.startsWith('fav_')) {
@@ -894,278 +822,6 @@ async function handleLeagueLiveCallback(data, chatId, userId, redis, services) {
   } catch (err) {
     logger.error('Live matches handler error', err);
     return null;
-  }
-}
-
-/**
- * Show match details and actions for a specific live match index
- * data format: match_{leagueId}_{index}
- */
-async function handleMatchCallback(data, chatId, userId, redis, services) {
-  try {
-    const parts = data.split('_');
-    const leagueId = parts[1] || null;
-    const idx = Number(parts[2] || 0);
-
-    let matches = [];
-    if (services && services.sportsAggregator) {
-      try {
-        matches = await services.sportsAggregator.getLiveMatches(leagueId);
-      } catch (e) {
-        logger.warn('Failed to fetch live matches for match details', e);
-      }
-    }
-
-    if (!matches || matches.length === 0 || !matches[idx]) {
-      return { method: 'answerCallbackQuery', callback_query_id: undefined, text: 'Match details unavailable', show_alert: true };
-    }
-
-    const m = matches[idx];
-    const score = (m.homeScore != null && m.awayScore != null) ? `${m.homeScore}-${m.awayScore}` : (m.score || 'N/A');
-    const time = m.time || m.minute || m.status || 'N/A';
-    const homeOdds = m.homeOdds || m.odds?.home || '-';
-    const awayOdds = m.awayOdds || m.odds?.away || '-';
-    const drawOdds = m.drawOdds || m.odds?.draw || '-';
-
-    let text = `🏟️ *Match Details*\n\n*${m.home}* vs *${m.away}*\n`;
-    text += `• Score: ${score}\n• Time: ${time}\n`;
-    text += `• Odds: Home ${homeOdds} • Draw ${drawOdds} • Away ${awayOdds}\n`;
-    if (m.possession) text += `• Possession: ${m.possession}\n`;
-    if (m.stats) text += `• Key: ${m.stats.join(' • ')}\n`;
-
-    const keyboard = [
-      [{ text: '🤖 Analyze Match', callback_data: `analyze_match_${leagueId}_${idx}` }],
-      [{ text: `⭐ Fav ${encodeURIComponent(m.home).split('%20')[0]}`, callback_data: `fav_add_${encodeURIComponent(m.home)}` }, { text: `⭐ Fav ${encodeURIComponent(m.away).split('%20')[0]}`, callback_data: `fav_add_${encodeURIComponent(m.away)}` }],
-      [{ text: '📊 View Odds', callback_data: `league_odds_${leagueId}` }],
-      [{ text: '🔙 Back', callback_data: `league_live_${leagueId}` }]
-    ];
-
-    return {
-      method: 'editMessageText',
-      chat_id: chatId,
-      message_id: undefined,
-      text,
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: keyboard }
-    };
-  } catch (e) {
-    logger.error('handleMatchCallback error', e);
-    return { method: 'answerCallbackQuery', callback_query_id: undefined, text: 'Failed to load match details', show_alert: true };
-  }
-}
-
-/**
- * Analyze a match using the multi-sport analyzer service
- * callback: analyze_match_{leagueId}_{index}
- */
-async function handleAnalyzeMatch(data, chatId, userId, redis, services) {
-  try {
-    const parts = data.split('_');
-    const leagueId = parts[2] || null;
-    const idx = Number(parts[3] || 0);
-
-    if (!services || !services.sportsAggregator) {
-      return { method: 'sendMessage', chat_id: chatId, text: 'Analysis service unavailable.', parse_mode: 'Markdown' };
-    }
-
-    const matches = await services.sportsAggregator.getLiveMatches(leagueId).catch(() => []);
-    const m = matches && matches[idx] ? matches[idx] : null;
-    if (!m) return { method: 'sendMessage', chat_id: chatId, text: 'Match not found for analysis.', parse_mode: 'Markdown' };
-
-    // Check user's subscription tier and prefer analyzer service if available
-    const subscription = await getUserSubscription(redis, userId).catch(() => ({ tier: 'FREE' }));
-
-    if (services.multiSportAnalyzer && typeof services.multiSportAnalyzer.analyzeMatch === 'function') {
-      try {
-        // Determine sport if available on match object
-        const sport = (m.sport || m.sportKey || 'football');
-        const home = m.home || m.homeTeam || m.home_name || m.teams?.home || 'Home';
-        const away = m.away || m.awayTeam || m.away_name || m.teams?.away || 'Away';
-
-        const analysis = await services.multiSportAnalyzer.analyzeMatch(sport, home, away, leagueId);
-
-        // If user is VVIP or higher, augment with VVIP extras
-        if (subscription && (subscription.tier === 'VVIP' || subscription.tier === 'PLUS')) {
-          // include curated fixed matches if any
-          try {
-            const fixed = await services.multiSportAnalyzer.getFixedMatches();
-            if (fixed && fixed.length > 0) {
-              let fixedText = `👑 *VVIP Fixed Matches*\n`;
-              fixed.slice(0, 5).forEach((f, i) => {
-                fixedText += `\n${i + 1}. *${f.home}* vs *${f.away}* — ${f.market} ${f.pick} (Confidence: ${f.confidence}%, Odds: ${f.odds})`;
-                if (f.reason) fixedText += `\n   ${f.reason}`;
-              });
-              // attach fixed matches to reasoning
-              if (!analysis._extras) analysis._extras = {};
-              analysis._extras.fixedMatches = fixedText;
-            }
-          } catch (e) {
-            logger.warn('Failed to fetch fixed matches for VVIP', e.message);
-          }
-
-          // Add advanced predictions: HT/FT and correct scores
-          try {
-            const htft = services.multiSportAnalyzer.predictHalftimeFulltime(analysis.matchData || {});
-            const cs = services.multiSportAnalyzer.predictCorrectScores(analysis.matchData || {});
-            if (!analysis._extras) analysis._extras = {};
-            analysis._extras.htft = htft;
-            analysis._extras.correctScores = cs;
-          } catch (e) {
-            logger.warn('Failed to generate advanced predictions', e.message);
-          }
-        }
-
-        // Format output
-        let formatted = services.multiSportAnalyzer.formatForTelegram ? services.multiSportAnalyzer.formatForTelegram(analysis) : JSON.stringify(analysis, null, 2);
-
-        // Append VVIP extras if present
-        if (analysis._extras) {
-          if (analysis._extras.fixedMatches) formatted = `${analysis._extras.fixedMatches}\n\n${formatted}`;
-          if (analysis._extras.htft) formatted += `\n\n*HT/FT Prediction:* ${analysis._extras.htft.htft} (Confidence ${analysis._extras.htft.confidence}%)\nReason: ${analysis._extras.htft.reasoning}`;
-          if (analysis._extras.correctScores && analysis._extras.correctScores.length > 0) {
-            formatted += `\n\n*Top Correct Scores:*`;
-            analysis._extras.correctScores.forEach((c, i) => {
-              formatted += `\n${i + 1}. ${c.score} — ${c.confidence}% (Odds ${c.odds})`;
-            });
-          }
-        }
-
-        return { method: 'sendMessage', chat_id: chatId, text: formatted, parse_mode: 'Markdown' };
-      } catch (e) {
-        logger.warn('Analyzer failed, falling back to summary', e);
-      }
-    }
-
-    // Fallback summary
-    const summary = `🤖 *Quick Match Summary*\n\n*${m.home}* vs *${m.away}*\nScore: ${m.score || 'N/A'}\nTime: ${m.time || 'N/A'}\n\n_No advanced analysis available right now._`;
-    return { method: 'sendMessage', chat_id: chatId, text: summary, parse_mode: 'Markdown' };
-  } catch (e) {
-    logger.error('handleAnalyzeMatch error', e);
-    return { method: 'sendMessage', chat_id: chatId, text: 'Failed to analyze match.', parse_mode: 'Markdown' };
-  }
-}
-
-/**
- * Show fixtures or quick info for a favorite team (fav_view_{team})
- */
-async function handleFavoriteView(data, chatId, userId, redis, services) {
-  try {
-    const team = decodeURIComponent(data.replace('fav_view_', ''));
-
-    // Try to fetch upcoming fixtures from sportsAggregator if available
-    if (services && services.sportsAggregator && typeof services.sportsAggregator.getTeamFixtures === 'function') {
-      try {
-        const fixtures = await services.sportsAggregator.getTeamFixtures(team);
-        if (fixtures && fixtures.length > 0) {
-          const list = fixtures.slice(0, 6).map((f, i) => `• ${f.home} vs ${f.away} — ${f.date || f.time || 'TBD'}`).join('\n');
-          return {
-            method: 'sendMessage',
-            chat_id: chatId,
-            text: `📌 *Upcoming for ${team}*\n\n${list}`,
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'profile_favorites' }]] }
-          };
-        }
-      } catch (e) {
-        logger.warn('Failed to fetch team fixtures', { team, e });
-      }
-    }
-
-    // Fallback: search live matches for team name
-    if (services && services.sportsAggregator && typeof services.sportsAggregator.getLiveMatches === 'function') {
-      try {
-        const allLive = await services.sportsAggregator.getLiveMatches();
-        const matches = (allLive || []).filter(m => (m.home && m.home.toLowerCase().includes(team.toLowerCase())) || (m.away && m.away.toLowerCase().includes(team.toLowerCase()))).slice(0, 6);
-        if (matches.length > 0) {
-          const list = matches.map((m, i) => `• ${m.home} vs ${m.away} — ${m.time || m.status || 'LIVE'}`).join('\n');
-          return {
-            method: 'sendMessage',
-            chat_id: chatId,
-            text: `🔴 *Live / Recent for ${team}*\n\n${list}`,
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'profile_favorites' }]] }
-          };
-        }
-      } catch (e) {
-        logger.warn('Failed to search live matches for team', { team, e });
-      }
-    }
-
-    return {
-      method: 'sendMessage',
-      chat_id: chatId,
-      text: `📌 No fixtures or live matches found for *${team}* right now.`,
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'profile_favorites' }]] }
-    };
-  } catch (e) {
-    logger.error('handleFavoriteView error', e);
-    return { method: 'sendMessage', chat_id: chatId, text: 'Failed to fetch team info.', parse_mode: 'Markdown' };
-  }
-}
-
-/**
- * Return VVIP fixed matches (requires VVIP access)
- */
-async function handleVvipFixedMatches(chatId, userId, redis, services) {
-  try {
-    const subscription = await getUserSubscription(redis, userId).catch(() => ({ tier: 'FREE' }));
-    if (!subscription || (subscription.tier !== 'VVIP' && subscription.tier !== 'PLUS')) {
-      return {
-        method: 'sendMessage',
-        chat_id: chatId,
-        text: '🔒 Fixed Matches are available for VVIP subscribers only. Upgrade to access.',
-        parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard: [[{ text: '👑 Upgrade to VVIP', callback_data: 'menu_vvip' }, { text: '🔙 Back', callback_data: 'menu_main' }]] }
-      };
-    }
-
-    if (!services || !services.multiSportAnalyzer || typeof services.multiSportAnalyzer.getFixedMatches !== 'function') {
-      return { method: 'sendMessage', chat_id: chatId, text: 'Fixed matches service unavailable.', parse_mode: 'Markdown' };
-    }
-
-    const fixed = await services.multiSportAnalyzer.getFixedMatches().catch(() => []);
-    if (!fixed || fixed.length === 0) {
-      return { method: 'sendMessage', chat_id: chatId, text: 'No fixed matches available at the moment.', parse_mode: 'Markdown' };
-    }
-
-    let text = `👑 *VVIP Fixed Matches*\n\n`;
-    fixed.slice(0, 8).forEach((f, i) => {
-      text += `${i + 1}. *${f.home}* vs *${f.away}* — ${f.market} ${f.pick} (Confidence: ${f.confidence}% | Odds: ${f.odds})\n`;
-      if (f.reason) text += `   • ${f.reason}\n`;
-    });
-
-    text += `\n⚠️ Fixed matches are curated for VVIP users. Bet responsibly.`;
-
-    return { method: 'sendMessage', chat_id: chatId, text, parse_mode: 'Markdown' };
-  } catch (e) {
-    logger.error('handleVvipFixedMatches error', e);
-    return { method: 'sendMessage', chat_id: chatId, text: 'Failed to load fixed matches.', parse_mode: 'Markdown' };
-  }
-}
-
-/**
- * Show info about advanced VVIP prediction markets and a CTA
- */
-async function handleVvipAdvancedInfo(chatId, userId, redis, services) {
-  try {
-    const subscription = await getUserSubscription(redis, userId).catch(() => ({ tier: 'FREE' }));
-    if (!subscription || (subscription.tier !== 'VVIP' && subscription.tier !== 'PLUS')) {
-      return {
-        method: 'sendMessage',
-        chat_id: chatId,
-        text: '🔒 Advanced HT/FT and Correct Score predictions are for VVIP users. Upgrade to access these markets.',
-        parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard: [[{ text: '👑 Upgrade to VVIP', callback_data: 'menu_vvip' }, { text: '🔙 Back', callback_data: 'menu_main' }]] }
-      };
-    }
-
-    const text = `👑 *VVIP Advanced Predictions*\n\nAs a VVIP member you get:\n• Half-time / Full-time probability lines (e.g., 1/X, X/1)\n• Correct score suggestions with confidence and implied odds\n• Curated fixed matches and high-confidence value bets\n\nTap *Fixed Matches* to view current curated picks or analyze a live match for HT/FT & correct score predictions.`;
-
-    return { method: 'sendMessage', chat_id: chatId, text, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '👑 View Fixed Matches', callback_data: 'vvip_fixed' }, { text: '🔙 Back', callback_data: 'menu_main' }]] } };
-  } catch (e) {
-    logger.error('handleVvipAdvancedInfo error', e);
-    return { method: 'sendMessage', chat_id: chatId, text: 'Failed to load VVIP info.', parse_mode: 'Markdown' };
   }
 }
 
@@ -1454,148 +1110,6 @@ async function handleSetBetStake(data, chatId, userId, redis) {
   } catch (err) {
     logger.error('handleSetBetStake error', err);
     return { method: 'sendMessage', chat_id: chatId, text: '❌ Error setting stake.', parse_mode: 'Markdown' };
-  }
-}
-
-/**
- * Start onboarding flow for new user
- */
-async function startOnboarding(chatId, userId, redis) {
-  try {
-    // seed onboarding state
-    const state = { step: 'name', createdAt: Date.now() };
-    await redis.setex(`user:${userId}:onboarding`, 1800, JSON.stringify(state));
-    return {
-      method: 'sendMessage',
-      chat_id: chatId,
-      text: '📝 Welcome to BETRIX! Let\'s set up your account. What is your full name?\n\n_Reply with your full name to continue._',
-      parse_mode: 'Markdown'
-    };
-  } catch (e) {
-    logger.error('startOnboarding failed', e);
-    return { method: 'sendMessage', chat_id: chatId, text: 'Failed to start signup. Try again later.' };
-  }
-}
-
-/**
- * Handle onboarding messages (name, age, country)
- */
-async function handleOnboardingMessage(text, chatId, userId, redis, services) {
-  try {
-    const raw = await redis.get(`user:${userId}:onboarding`);
-    if (!raw) return null;
-    const state = JSON.parse(raw);
-
-    if (state.step === 'name') {
-      const name = String(text || '').trim();
-      if (!name || name.length < 2) {
-        return { method: 'sendMessage', chat_id: chatId, text: 'Please send a valid full name (at least 2 characters).' };
-      }
-      await redis.hset(`user:${userId}`, 'name', name);
-      state.step = 'age';
-      await redis.setex(`user:${userId}:onboarding`, 1800, JSON.stringify(state));
-      return { method: 'sendMessage', chat_id: chatId, text: `Thanks *${name}*! How old are you?`, parse_mode: 'Markdown' };
-    }
-
-    if (state.step === 'age') {
-      const age = parseInt((text || '').replace(/\D/g, ''), 10);
-      if (!age || age < 13) {
-        return { method: 'sendMessage', chat_id: chatId, text: 'Please enter a valid age (13+).' };
-      }
-      await redis.hset(`user:${userId}`, 'age', String(age));
-      state.step = 'country';
-      await redis.setex(`user:${userId}:onboarding`, 1800, JSON.stringify(state));
-
-      // present country options
-      const keyboard = [
-        [ { text: '🇰🇪 Kenya', callback_data: 'signup_country_KE' }, { text: '🇳🇬 Nigeria', callback_data: 'signup_country_NG' } ],
-        [ { text: '🇺🇸 USA', callback_data: 'signup_country_US' }, { text: '🇬🇧 UK', callback_data: 'signup_country_UK' } ],
-        [ { text: '🌍 Other', callback_data: 'signup_country_OTHER' } ]
-      ];
-
-      return { method: 'sendMessage', chat_id: chatId, text: 'Great — which country are you in? (choose below)', parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } };
-    }
-
-    // default fallback
-    return { method: 'sendMessage', chat_id: chatId, text: 'Onboarding in progress. Please follow the instructions.' };
-  } catch (e) {
-    logger.error('handleOnboardingMessage failed', e);
-    return { method: 'sendMessage', chat_id: chatId, text: 'Signup failed. Please try again.' };
-  }
-}
-
-/**
- * Handle signup country callback
- */
-async function handleSignupCountry(data, chatId, userId, redis, services) {
-  try {
-    const code = data.replace('signup_country_', '') || 'OTHER';
-    await redis.hset(`user:${userId}:profile`, 'region', code);
-    // mark onboarding to confirm
-    const state = { step: 'confirm' };
-    await redis.setex(`user:${userId}:onboarding`, 1800, JSON.stringify(state));
-
-    const user = await redis.hgetall(`user:${userId}`) || {};
-    const profile = await redis.hgetall(`user:${userId}:profile`) || {};
-
-    const name = user.name || 'New User';
-    const age = user.age || 'N/A';
-    const region = profile.region || code;
-
-    // compute signup fee suggestion based on region
-    // Updated signup fee: KES 150 (~1 USD) for Kenya, USD 1 for others by default
-    const feeMap = { KE: 150, NG: 500, US: 1, UK: 1, OTHER: 1 };
-    const amount = feeMap[region] || feeMap.OTHER;
-
-    // choose suggested payment methods for region
-    const methods = getAvailablePaymentMethods(region).map(m => m.id);
-
-    // Build payment buttons for signup (signup_pay_{method}_{amount})
-    const keyboard = methods.map(mid => ([{ text: `${PAYMENT_PROVIDERS[mid]?.symbol || ''} ${PAYMENT_PROVIDERS[mid]?.name || mid}`, callback_data: `signup_pay_${mid}_${amount}` }]));
-    keyboard.push([{ text: '🔙 Cancel', callback_data: 'menu_main' }]);
-
-    const text = `✅ Please confirm your details:\nName: *${name}*\nAge: *${age}*\nCountry: *${region}*\n\nTo complete signup, a one-time fee of *${amount}* will be charged based on your region. Choose a payment method below:`;
-
-    return { method: 'sendMessage', chat_id: chatId, text, parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } };
-  } catch (e) {
-    logger.error('handleSignupCountry failed', e);
-    return { method: 'sendMessage', chat_id: chatId, text: 'Failed to select country. Try again.' };
-  }
-}
-
-/**
- * Handle signup payment callback: signup_pay_{METHOD}_{AMOUNT}
- */
-async function handleSignupPaymentCallback(data, chatId, userId, redis, services) {
-  try {
-    const parts = data.split('_');
-    // parts: ['signup','pay','METHOD','AMOUNT']
-    const method = parts[2];
-    const amount = Number(parts[3] || 0);
-    const profile = await redis.hgetall(`user:${userId}:profile`) || {};
-    const region = profile.region || 'KE';
-
-    // create custom payment order
-    const { createCustomPaymentOrder, getPaymentInstructions } = await import('./payment-router.js');
-    const order = await createCustomPaymentOrder(redis, userId, amount, method, region, { signup: true });
-    const instructions = await getPaymentInstructions(redis, order.orderId, method).catch(() => null);
-
-    let instrText = `Please complete payment for order *${order.orderId}*\nAmount: ${order.totalAmount} ${order.currency}\n`;
-    if (instructions && instructions.description) instrText += `\n${instructions.description}\n`;
-    if (instructions && instructions.manualSteps) instrText += `\nSteps:\n${instructions.manualSteps.join('\n')}`;
-    if (instructions && instructions.checkoutUrl) instrText += `\nOpen: ${instructions.checkoutUrl}`;
-
-    const keyboard = [];
-    if (instructions && instructions.checkoutUrl) keyboard.push([{ text: '🔗 Open Payment Link', url: instructions.checkoutUrl }]);
-    keyboard.push([{ text: '✅ I Paid', callback_data: `verify_payment_${order.orderId}` }]);
-    // Add a quick instruction to paste the transaction message here for automatic verification
-    instrText += `\n\n*Tip:* After paying, you can paste the full transaction confirmation message you receive (e.g. M-Pesa confirmation) into this chat and BETRIX will try to confirm it automatically.`;
-    keyboard.push([{ text: '🔙 Main Menu', callback_data: 'menu_main' }]);
-
-    return { method: 'sendMessage', chat_id: chatId, text: instrText, parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } };
-  } catch (e) {
-    logger.error('handleSignupPaymentCallback failed', e);
-    return { method: 'sendMessage', chat_id: chatId, text: `Failed to create signup payment: ${e.message}` };
   }
 }
 

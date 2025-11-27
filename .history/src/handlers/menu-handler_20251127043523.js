@@ -33,8 +33,7 @@ Your AI-powered sports betting companion. Get live odds, predictions, and analys
         { text: '👤 My Profile', callback_data: 'menu_profile' }
       ],
       [
-        { text: '💰 Subscribe to VVIP', callback_data: 'menu_vvip' },
-        { text: '📝 Sign Up', callback_data: 'signup_start' }
+        { text: '💰 Subscribe to VVIP', callback_data: 'menu_vvip' }
       ],
       [
         { text: '❓ Help', callback_data: 'menu_help' }
@@ -42,10 +41,6 @@ Your AI-powered sports betting companion. Get live odds, predictions, and analys
     ]
   }
 };
-
-
-// Add a Sign Up quick action to be used by handlers if needed
-export const signUpAction = { text: '📝 Sign Up', callback_data: 'signup_start' };
 
 /**
  * Welcome message for new users (pre-signup)
@@ -117,11 +112,6 @@ export const subscriptionMenu = {
 • Pro: KES 899/month
 • VVIP: KES 2,699/month
 • *BETRIX Plus Bundle:* KES 8,999/month
-
-*Fixed-odds Packs:*
-• Fixed Bronze (5 tips): KES 499/month
-• Fixed Silver (15 tips): KES 1,299/month
-• Fixed Gold (50 tips): KES 4,499/month
 
 *Payment Options:*
 🏪 Pay via Safaricom Till #${TILL_NUMBER} (Instant)

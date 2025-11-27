@@ -118,11 +118,6 @@ export const subscriptionMenu = {
 • VVIP: KES 2,699/month
 • *BETRIX Plus Bundle:* KES 8,999/month
 
-*Fixed-odds Packs:*
-• Fixed Bronze (5 tips): KES 499/month
-• Fixed Silver (15 tips): KES 1,299/month
-• Fixed Gold (50 tips): KES 4,499/month
-
 *Payment Options:*
 🏪 Pay via Safaricom Till #${TILL_NUMBER} (Instant)
 📱 M-Pesa (STK Push)

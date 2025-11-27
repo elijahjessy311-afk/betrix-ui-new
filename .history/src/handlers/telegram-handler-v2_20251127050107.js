@@ -1588,8 +1588,6 @@ async function handleSignupPaymentCallback(data, chatId, userId, redis, services
     const keyboard = [];
     if (instructions && instructions.checkoutUrl) keyboard.push([{ text: '🔗 Open Payment Link', url: instructions.checkoutUrl }]);
     keyboard.push([{ text: '✅ I Paid', callback_data: `verify_payment_${order.orderId}` }]);
-    // Add a quick instruction to paste the transaction message here for automatic verification
-    instrText += `\n\n*Tip:* After paying, you can paste the full transaction confirmation message you receive (e.g. M-Pesa confirmation) into this chat and BETRIX will try to confirm it automatically.`;
     keyboard.push([{ text: '🔙 Main Menu', callback_data: 'menu_main' }]);
 
     return { method: 'sendMessage', chat_id: chatId, text: instrText, parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } };

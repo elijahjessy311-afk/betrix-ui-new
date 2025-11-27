@@ -5,7 +5,7 @@
 
 import { Logger } from '../utils/logger.js';
 import { getUserSubscription } from './payment-handler.js';
-import { getAvailablePaymentMethods, PAYMENT_PROVIDERS, verifyPaymentFromMessage, getAvailablePackages } from './payment-router.js';
+import { getAvailablePaymentMethods, PAYMENT_PROVIDERS } from './payment-router.js';
 import {
   mainMenu,
   sportsMenu,
@@ -122,27 +122,6 @@ export async function handleMessage(update, redis, services) {
       }
     } catch (e) {
       logger.warn('Failed to read onboarding state', e);
-    }
-
-    // If user has a pending payment order, allow them to paste transaction text to confirm payment
-    try {
-      const pendingOrderId = await redis.get(`payment:by_user:${userId}:pending`);
-      if (pendingOrderId && text && !text.startsWith('/')) {
-        // Heuristic: user pasted a transaction message if it contains Ksh/KES/Ref/Transaction or looks like an alphanumeric tx id
-        const txHint = /\b(Ksh|KES|Ref(erence)?|Transaction|Receipt|Trx|MPESA|M-Pesa)\b/i;
-        if (txHint.test(text) || /[A-Z0-9]{6,}/i.test(text)) {
-          try {
-            const result = await verifyPaymentFromMessage(redis, userId, text);
-            // result contains success info from verifyAndActivatePayment
-            return { method: 'sendMessage', chat_id: chatId, text: result.message || 'Payment confirmed. Your subscription is active.', parse_mode: 'Markdown' };
-          } catch (e) {
-            // If parsing failed, let the message continue to NLP or notify user
-            return { method: 'sendMessage', chat_id: chatId, text: `❌ Payment verification failed: ${e.message}.\nPlease ensure you pasted the full transaction message including reference and amount.`, parse_mode: 'Markdown' };
-          }
-        }
-      }
-    } catch (e) {
-      logger.warn('Failed to check pending payment for user', e);
     }
 
     // Store user session
@@ -1543,8 +1522,7 @@ async function handleSignupCountry(data, chatId, userId, redis, services) {
     const region = profile.region || code;
 
     // compute signup fee suggestion based on region
-    // Updated signup fee: KES 150 (~1 USD) for Kenya, USD 1 for others by default
-    const feeMap = { KE: 150, NG: 500, US: 1, UK: 1, OTHER: 1 };
+    const feeMap = { KE: 100, NG: 500, US: 5, UK: 5, OTHER: 5 };
     const amount = feeMap[region] || feeMap.OTHER;
 
     // choose suggested payment methods for region
@@ -1588,8 +1566,6 @@ async function handleSignupPaymentCallback(data, chatId, userId, redis, services
     const keyboard = [];
     if (instructions && instructions.checkoutUrl) keyboard.push([{ text: '🔗 Open Payment Link', url: instructions.checkoutUrl }]);
     keyboard.push([{ text: '✅ I Paid', callback_data: `verify_payment_${order.orderId}` }]);
-    // Add a quick instruction to paste the transaction message here for automatic verification
-    instrText += `\n\n*Tip:* After paying, you can paste the full transaction confirmation message you receive (e.g. M-Pesa confirmation) into this chat and BETRIX will try to confirm it automatically.`;
     keyboard.push([{ text: '🔙 Main Menu', callback_data: 'menu_main' }]);
 
     return { method: 'sendMessage', chat_id: chatId, text: instrText, parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } };

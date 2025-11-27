@@ -596,19 +596,12 @@ export async function verifyAndActivatePayment(redis, orderId, transactionId) {
     orderData.completedAt = new Date().toISOString();
 
     // Activate user subscription
-    if (tier === 'SIGNUP') {
-      // One-time signup fee: grant analysis access without changing main tier
-      await redis.hset(`user:${userId}`, 'signupPaid', '1');
-      await redis.hset(`user:${userId}`, 'analysisAccessUntil', new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString());
-      // Do not overwrite existing tier; keep user's tier (default FREE)
-    } else {
-      await redis.hset(`user:${userId}`, 'tier', tier);
-      await redis.hset(
-        `user:${userId}`,
-        'subscriptionExpiry',
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-      );
-    }
+    await redis.hset(`user:${userId}`, 'tier', tier);
+    await redis.hset(
+      `user:${userId}`,
+      'subscriptionExpiry',
+      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    );
 
     // Store transaction
     await redis.setex(
@@ -645,131 +638,13 @@ export async function simulatePaymentComplete(redis, orderId) {
 /**
  * Get tier pricing
  */
-function getTierPrice(tier, paymentMethod = 'PAYPAL') {
-  // Prices defined with KES and USD values
+function getTierPrice(tier) {
   const prices = {
-    SIGNUP: { KES: 150, USD: 1 },
-    PRO: { KES: 899, USD: 8.99 },
-    VVIP: { KES: 2699, USD: 29.99 },
-    PLUS: { KES: 8999, USD: 99.99 },
-    FIXED_BRONZE: { KES: 499, USD: 4.99 },
-    FIXED_SILVER: { KES: 1299, USD: 12.99 },
-    FIXED_GOLD: { KES: 4499, USD: 44.99 }
+    PRO: 9.99,
+    VVIP: 29.99,
+    PLUS: 99.99
   };
-
-  const tierObj = prices[tier];
-  if (!tierObj) return 0;
-
-  const provider = PAYMENT_PROVIDERS[paymentMethod];
-  const currency = provider ? provider.currencies[0] : 'USD';
-
-  if (currency === 'KES' || currency === 'KSH') return tierObj.KES;
-  return tierObj.USD;
-}
-
-/**
- * Return available VVIP/fixed packages metadata
- */
-export function getAvailablePackages() {
-  return {
-    SIGNUP: { id: 'SIGNUP', name: 'Signup Fee (One-time)', description: 'Activate analyze & core features', price: { KES: 150, USD: 1 }, currency: 'KES' },
-    PRO: { id: 'PRO', name: 'Pro Monthly', description: 'Enhanced analytics', price: { KES: 899, USD: 8.99 }, currency: 'KES' },
-    VVIP: { id: 'VVIP', name: 'VVIP Monthly', description: 'Unlimited AI analysis & alerts', price: { KES: 2699, USD: 29.99 }, currency: 'KES' },
-    PLUS: { id: 'PLUS', name: 'BETRIX Plus', description: 'Enterprise bundle', price: { KES: 8999, USD: 99.99 }, currency: 'KES' },
-    FIXED_BRONZE: { id: 'FIXED_BRONZE', name: 'Fixed Bronze', description: '5 fixed-odds tips / month', price: { KES: 499, USD: 4.99 }, currency: 'KES' },
-    FIXED_SILVER: { id: 'FIXED_SILVER', name: 'Fixed Silver', description: '15 fixed-odds tips / month', price: { KES: 1299, USD: 12.99 }, currency: 'KES' },
-    FIXED_GOLD: { id: 'FIXED_GOLD', name: 'Fixed Gold', description: '50 fixed-odds tips / month', price: { KES: 4499, USD: 44.99 }, currency: 'KES' }
-  };
-}
-
-/**
- * Parse a pasted transaction message and extract common fields
- * Supports common M-Pesa / Till / PayPal plaintext confirmations
- */
-export function parseTransactionMessage(text) {
-  if (!text || typeof text !== 'string') return {};
-
-  const normalized = text.replace(/[\n\r]/g, ' ').trim();
-
-  // Try to extract amount
-  const amountMatch = normalized.match(/(?:Ksh|KES|KES\.|KES|USD|\$|\b)(\s?\d{1,3}(?:[.,]\d{1,2})?)/i);
-  let amount = null;
-  if (amountMatch) {
-    const num = amountMatch[1].replace(/[,]/g, '.').replace(/\s/g, '');
-    amount = parseFloat(num);
-  }
-
-  // Try to find reference tokens e.g., Ref, Reference, Till
-  const refMatch = normalized.match(/(?:Ref(?:erence)?|Reference|Till|Trx|Transaction|Receipt)[:\s]*([A-Z0-9-]{3,32})/i);
-  const reference = refMatch ? refMatch[1] : null;
-
-  // Try to find phone number
-  const phoneMatch = normalized.match(/(\+?2547\d{8}|07\d{8}|\+?\d{9,15})/);
-  const phone = phoneMatch ? phoneMatch[1] : null;
-
-  // Transaction id (alphanumeric token)
-  const txIdMatch = normalized.match(/\b([A-Z0-9]{6,20})\b/);
-  const transactionId = txIdMatch ? txIdMatch[1] : null;
-
-  return { raw: text, normalized, amount, reference, phone, transactionId };
-}
-
-/**
- * Attempt to verify payment by inspecting a pasted transaction message.
- * Strategy:
- *  - If reference present, lookup mapping payment:by_provider_ref across providers
- *  - If phone present, lookup payment:by_phone
- *  - Otherwise check user's pending order and compare amounts
- */
-export async function verifyPaymentFromMessage(redis, userId, text) {
-  try {
-    const parsed = parseTransactionMessage(text);
-    const { reference, phone, amount, transactionId } = parsed;
-
-    // 1) Reference lookup across providers
-    if (reference) {
-      for (const key of Object.keys(PAYMENT_PROVIDERS)) {
-        try {
-          const oid = await redis.get(`payment:by_provider_ref:${key}:${reference}`);
-          if (oid) {
-            // Use reference as transactionId if none
-            const tx = transactionId || reference;
-            return await verifyAndActivatePayment(redis, oid, tx);
-          }
-        } catch (e) {
-          // ignore individual provider lookup failures
-        }
-      }
-    }
-
-    // 2) Phone lookup
-    if (phone) {
-      const phoneNorm = String(phone).replace(/\+|\s|-/g, '');
-      const oid = await redis.get(`payment:by_phone:${phoneNorm}`);
-      if (oid) {
-        const tx = transactionId || (`PHONE-${Date.now()}`);
-        return await verifyAndActivatePayment(redis, oid, tx);
-      }
-    }
-
-    // 3) Check user's pending order and match by amount tolerance
-    const pending = await redis.get(`payment:by_user:${userId}:pending`);
-    if (pending) {
-      const orderRaw = await redis.get(`payment:order:${pending}`);
-      if (orderRaw) {
-        const order = JSON.parse(orderRaw);
-        // Compare amounts (allow small rounding differences)
-        if (amount && Math.abs(Number(order.totalAmount) - Number(amount)) <= 1) {
-          const tx = transactionId || (`MSG-${Date.now()}`);
-          return await verifyAndActivatePayment(redis, pending, tx);
-        }
-      }
-    }
-
-    throw new Error('Could not match the pasted transaction to any pending order. Please ensure your payment included the reference or pay the exact amount shown in the payment instructions.');
-  } catch (err) {
-    throw err;
-  }
+  return prices[tier] || 0;
 }
 
 export default {
