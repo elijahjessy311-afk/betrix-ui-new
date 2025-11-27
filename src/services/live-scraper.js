@@ -1,8 +1,8 @@
 import fetch from 'node-fetch';
 import { load as cheerioLoad } from 'cheerio';
 import { Logger } from '../utils/logger.js';
-import { HttpProxyAgent } from 'http-proxy-agent';
-import { HttpsProxyAgent } from 'https-proxy-agent';
+// import { HttpProxyAgent } from 'http-proxy-agent';
+// import { HttpsProxyAgent } from 'https-proxy-agent';
 
 const logger = new Logger('LiveScraper');
 
@@ -39,24 +39,25 @@ function getNextProxy() {
 }
 
 function getProxyAgent(proxyUrl) {
-  if (!proxyUrl) return null;
-  
-  // Return cached agent if available
-  if (proxyAgentCache.has(proxyUrl)) {
-    return proxyAgentCache.get(proxyUrl);
-  }
-
-  try {
-    const isHttps = proxyUrl.startsWith('https://');
-    const AgentClass = isHttps ? HttpsProxyAgent : HttpProxyAgent;
-    const agent = new AgentClass(proxyUrl);
-    proxyAgentCache.set(proxyUrl, agent);
-    return agent;
-  } catch (e) {
-    logger.warn(`Failed to create proxy agent for ${proxyUrl}: ${e.message}`);
-    return null;
-  }
-}
+  // Proxy agents disabled - not installed
+  // if (!proxyUrl) return null;
+  // 
+  // // Return cached agent if available
+  // if (proxyAgentCache.has(proxyUrl)) {
+  //   return proxyAgentCache.get(proxyUrl);
+  // }
+  //
+  // try {
+  //   const isHttps = proxyUrl.startsWith('https://');
+  //   const AgentClass = isHttps ? HttpsProxyAgent : HttpProxyAgent;
+  //   const agent = new AgentClass(proxyUrl);
+  //   proxyAgentCache.set(proxyUrl, agent);
+  //   return agent;
+  // } catch (e) {
+  //   logger.warn(`Failed to create proxy agent for ${proxyUrl}: ${e.message}`);
+  //   return null;
+  // }
+  return null;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
