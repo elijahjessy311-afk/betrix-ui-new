@@ -1955,7 +1955,7 @@ function buildPaymentMethodButtons(methodIds, tier) {
 async function handleProfileCallback(data, chatId, userId, redis) {
   try {
     if (data === 'profile_stats') {
-      const user = await safeGetUserData(redis, `user:${userId}`) || {};
+      const user = await redis.hgetall(`user:${userId}`) || {};
       const sub = await getUserSubscription(redis, userId);
       
       return {
@@ -1963,11 +1963,11 @@ async function handleProfileCallback(data, chatId, userId, redis) {
         chat_id: chatId,
         message_id: undefined,
         text: formatProfile({
-          name: (user && user.name) || 'BETRIX User',
+          name: user.name || 'BETRIX User',
           tier: sub.tier || 'FREE',
-          joinDate: (user && user.joinDate) || new Date().toLocaleDateString(),
-          predictions: (user && user.predictions) || 0,
-          winRate: (user && user.winRate) || '0',
+          joinDate: user.joinDate || new Date().toLocaleDateString(),
+          predictions: user.predictions || 0,
+          winRate: user.winRate || '0',
           points: user.points || 0,
           referralCode: user.referralCode || `USER${userId}`,
           referrals: user.referrals || 0,
