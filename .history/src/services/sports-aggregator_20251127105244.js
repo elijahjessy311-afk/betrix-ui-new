@@ -832,50 +832,8 @@ export class SportsAggregator {
     this.cache.set(key, { data, timestamp: Date.now() });
   }
 
-  _normalizeOpenLigaMatch(m) {
-    // Map OpenLiga match fields to canonical analyzer schema
-    try {
-      const home = (m.Team1 && (m.Team1.TeamName || m.Team1.Name)) || m.home || 'Home';
-      const away = (m.Team2 && (m.Team2.TeamName || m.Team2.Name)) || m.away || 'Away';
-      const homeScore = m.MatchResults && m.MatchResults[0] && m.MatchResults[0].PointsTeam1 || null;
-      const awayScore = m.MatchResults && m.MatchResults[0] && m.MatchResults[0].PointsTeam2 || null;
-      const matchTime = m.MatchDateTime || null;
-      const status = m.MatchIsFinished ? 'FINISHED' : (m.MatchDateTime && new Date(m.MatchDateTime) > new Date() ? 'SCHEDULED' : 'LIVE');
-      
-      return {
-        id: m.MatchID || null,
-        home: String(home),
-        away: String(away),
-        homeScore: homeScore !== null ? Number(homeScore) : null,
-        awayScore: awayScore !== null ? Number(awayScore) : null,
-        status,
-        time: matchTime ? new Date(matchTime).toLocaleString() : 'TBA',
-        venue: m.Location && m.Location.LocationCity ? `${m.Location.LocationCity}, ${m.Location.LocationStadium || ''}` : 'TBA',
-        provider: 'openligadb',
-        raw: m
-      };
-    } catch (e) {
-      logger.warn('OpenLiga normalization error', e?.message || String(e));
-      return {
-        id: null,
-        home: 'Team1',
-        away: 'Team2',
-        homeScore: null,
-        awayScore: null,
-        status: 'UNKNOWN',
-        time: 'TBA',
-        venue: 'TBA',
-        provider: 'openligadb',
-        raw: m
-      };
-    }
-  }
-
   _formatMatches(matches, source) {
     return matches.map(m => {
-      if (source === 'openligadb') {
-        return m; // already normalized
-      }
       if (source === 'api-sports') {
         return {
           id: m.fixture.id,
