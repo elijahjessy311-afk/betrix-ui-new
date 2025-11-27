@@ -217,10 +217,24 @@ export class MultiSportAnalyzer {
       // For football, use SportsAggregator
       if (sport === 'football' && this.sportsAggregator) {
         const matches = await this.sportsAggregator.getLiveMatches(leagueId);
-        const match = matches?.find(m => 
-          (m.homeTeam?.toLowerCase() === homeTeam?.toLowerCase() || m.home?.toLowerCase() === homeTeam?.toLowerCase()) &&
-          (m.awayTeam?.toLowerCase() === awayTeam?.toLowerCase() || m.away?.toLowerCase() === awayTeam?.toLowerCase())
-        );
+        // Helper to coerce team value to a lowercase string
+        const toName = (val) => {
+          if (!val && val !== 0) return '';
+          if (typeof val === 'string') return val.toLowerCase();
+          if (typeof val === 'number') return String(val).toLowerCase();
+          if (val?.name) return String(val.name).toLowerCase();
+          if (val?.team) return String(val.team).toLowerCase();
+          if (val?.fullName) return String(val.fullName).toLowerCase();
+          return String(val).toLowerCase();
+        };
+
+        const match = matches?.find(m => {
+          const homeName = toName(m.homeTeam || m.home);
+          const awayName = toName(m.awayTeam || m.away);
+          const wantedHome = toName(homeTeam);
+          const wantedAway = toName(awayTeam);
+          return homeName === wantedHome && awayName === wantedAway;
+        });
         
         if (match) {
           return this._normalizeFootballData(match);

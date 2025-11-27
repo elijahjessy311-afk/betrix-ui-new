@@ -49,6 +49,16 @@ async function safeGetUserData(redis, key) {
 
 // instantiate a module-level logger for this handler
 const logger = new Logger('TelegramHandlerV2');
+// Helper: safely extract a team name string from various provider shapes
+function teamNameOf(val) {
+  if (val == null) return 'Unknown';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  if (val.name) return String(val.name);
+  if (val.team) return String(val.team);
+  if (val.fullName) return String(val.fullName);
+  try { return JSON.stringify(val); } catch (e) { return String(val); }
+}
 function normalizeApiFootballFixture(fx) {
   // api-football fixture shape -> { home, away, homeOdds, drawOdds, awayOdds }
   try {
@@ -1077,15 +1087,22 @@ async function handleLeagueLiveCallback(data, chatId, userId, redis, services) {
     }).join('\n\n');
 
     // keyboard: for each match add a row with Details and Favorite buttons
-    const keyboard = limited.map((m, i) => ([
-      { text: `🔎 Details ${i + 1}`, callback_data: `match_${leagueId}_${i}` },
-      { text: `⭐ Fav ${encodeURIComponent(m.home).split('%20')[0]}`, callback_data: `fav_add_${encodeURIComponent(m.home)}` }
-    ]));
+    const keyboard = limited.map((m, i) => {
+      const homeLabel = teamNameOf(m.home);
+      const awayLabel = teamNameOf(m.away);
+      const homeKey = encodeURIComponent(homeLabel);
+      return [
+        { text: `🔎 Details ${i + 1}`, callback_data: `match_${leagueId}_${i}` },
+        { text: `⭐ Fav ${homeLabel.split(' ')[0]}`, callback_data: `fav_add_${homeKey}` }
+      ];
+    });
 
     // also allow favoriting away team on next row for compactness
     limited.forEach((m, i) => {
+      const awayLabel = teamNameOf(m.away);
+      const awayKey = encodeURIComponent(awayLabel);
       keyboard.push([
-        { text: `⭐ Fav ${encodeURIComponent(m.away).split('%20')[0]}`, callback_data: `fav_add_${encodeURIComponent(m.away)}` },
+        { text: `⭐ Fav ${awayLabel.split(' ')[0]}`, callback_data: `fav_add_${awayKey}` },
         { text: `🔁 Odds ${i + 1}`, callback_data: `league_odds_${leagueId}` }
       ]);
     });
@@ -1173,9 +1190,14 @@ async function handleMatchCallback(data, chatId, userId, redis, services) {
       backData = `league_live_${leagueId}`;
     }
 
+    const homeLabel = teamNameOf(m.home);
+    const awayLabel = teamNameOf(m.away);
+    const homeKey = encodeURIComponent(homeLabel);
+    const awayKey = encodeURIComponent(awayLabel);
+
     const keyboard = [
       [{ text: '🤖 Analyze Match', callback_data: `analyze_match_${leagueId || 'live'}_${idx}` }],
-      [{ text: `⭐ Fav ${encodeURIComponent(m.home).split('%20')[0]}`, callback_data: `fav_add_${encodeURIComponent(m.home)}` }, { text: `⭐ Fav ${encodeURIComponent(m.away).split('%20')[0]}`, callback_data: `fav_add_${encodeURIComponent(m.away)}` }],
+      [{ text: `⭐ Fav ${homeLabel.split(' ')[0]}`, callback_data: `fav_add_${homeKey}` }, { text: `⭐ Fav ${awayLabel.split(' ')[0]}`, callback_data: `fav_add_${awayKey}` }],
       [{ text: '📊 View Odds', callback_data: leagueId ? `league_odds_${leagueId}` : 'menu_odds' }],
       [{ text: '🔙 Back', callback_data: backData }]
     ];

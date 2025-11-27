@@ -548,7 +548,9 @@ export class SportsAggregator {
         }
       });
 
-      return (response.events || []).slice(0, 10);
+      // response may be undefined or not contain events; guard safely
+      const events = (response && response.events) ? response.events : [];
+      return events.slice(0, 10);
     } catch (e) {
       logger.warn('SofaScore live matches failed', e.message);
       return [];
@@ -566,7 +568,8 @@ export class SportsAggregator {
         }
       });
 
-      return (response.odds || []).slice(0, 10);
+      const odds = (response && response.odds) ? response.odds : [];
+      return odds.slice(0, 10);
     } catch (e) {
       logger.warn('SofaScore odds failed', e.message);
       return [];
