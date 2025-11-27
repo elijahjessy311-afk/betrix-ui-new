@@ -2014,9 +2014,8 @@ We're here to help! Reach out:
 async function handlePaymentMethodSelection(data, chatId, userId, redis, services) {
   try {
     const parts = data.split('_');
-    // Format: pay_METHOD (e.g., pay_mpesa, pay_till)
-    // Tier is retrieved from pending_payment in Redis (set when sub_vvip was clicked)
-    if (parts.length < 2) {
+    // Format: pay_METHOD_TIER (e.g., pay_mpesa_vvip, pay_safaricom_till_pro)
+    if (parts.length < 3) {
       logger.error('Invalid payment callback format', { data, parts });
       return {
         method: 'answerCallbackQuery',
@@ -2026,54 +2025,27 @@ async function handlePaymentMethodSelection(data, chatId, userId, redis, service
       };
     }
     
-    // Extract payment method (everything after "pay_") and map to provider key
-    const callbackMethod = data.replace('pay_', '').toUpperCase();
-    
-    // Map callback names to provider keys
-    const methodMap = {
-      'TILL': 'SAFARICOM_TILL',
-      'MPESA': 'MPESA',
-      'PAYPAL': 'PAYPAL',
-      'BINANCE': 'BINANCE',
-      'SWIFT': 'SWIFT',
-      'BITCOIN': 'BITCOIN',
-      'QUICK_VVIP': 'SAFARICOM_TILL' // Quick VVIP uses Safaricom Till
-    };
-    
-    const paymentMethod = methodMap[callbackMethod] || callbackMethod;
-    
-    // Get tier from pending_payment record in Redis (should have been set by sub_* callback)
-    let tier = 'VVIP'; // default fallback
-    try {
-      const pending = await redis.get(`user:${userId}:pending_payment`);
-      if (pending) {
-        const pendingObj = JSON.parse(pending);
-        tier = pendingObj.tier || tier;
-      } else {
-        logger.warn('No pending payment found for user', { userId, data });
-      }
-    } catch (e) {
-      logger.warn('Failed to read pending tier from redis', { userId, error: e.message });
-    }
+    const tier = parts[parts.length - 1].toUpperCase();
+    const paymentMethod = parts.slice(1, -1).join('_').toUpperCase();
     
     // Validate tier
     if (!TIERS[tier]) {
-      logger.error('Invalid tier from pending payment', { data, tier });
+      logger.error('Invalid tier in payment callback', { data, tier });
       return {
         method: 'answerCallbackQuery',
         callback_query_id: undefined,
-        text: '❌ Invalid tier. Please select tier again.',
+        text: '❌ Invalid tier. Please try again.',
         show_alert: true
       };
     }
     
     // Validate payment method exists in PAYMENT_PROVIDERS
     if (!PAYMENT_PROVIDERS[paymentMethod]) {
-      logger.error('Unknown payment method', { data, paymentMethod, callbackMethod });
+      logger.error('Unknown payment method', { data, paymentMethod });
       return {
         method: 'answerCallbackQuery',
         callback_query_id: undefined,
-        text: `❌ Payment method '${callbackMethod}' not recognized. Please try again.`,
+        text: `❌ Payment method '${paymentMethod}' not recognized. Please try again.`,
         show_alert: true
       };
     }

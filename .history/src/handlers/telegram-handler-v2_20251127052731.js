@@ -2026,21 +2026,8 @@ async function handlePaymentMethodSelection(data, chatId, userId, redis, service
       };
     }
     
-    // Extract payment method (everything after "pay_") and map to provider key
-    const callbackMethod = data.replace('pay_', '').toUpperCase();
-    
-    // Map callback names to provider keys
-    const methodMap = {
-      'TILL': 'SAFARICOM_TILL',
-      'MPESA': 'MPESA',
-      'PAYPAL': 'PAYPAL',
-      'BINANCE': 'BINANCE',
-      'SWIFT': 'SWIFT',
-      'BITCOIN': 'BITCOIN',
-      'QUICK_VVIP': 'SAFARICOM_TILL' // Quick VVIP uses Safaricom Till
-    };
-    
-    const paymentMethod = methodMap[callbackMethod] || callbackMethod;
+    // Extract payment method (everything after "pay_")
+    const paymentMethod = data.replace('pay_', '').toUpperCase();
     
     // Get tier from pending_payment record in Redis (should have been set by sub_* callback)
     let tier = 'VVIP'; // default fallback
@@ -2069,11 +2056,11 @@ async function handlePaymentMethodSelection(data, chatId, userId, redis, service
     
     // Validate payment method exists in PAYMENT_PROVIDERS
     if (!PAYMENT_PROVIDERS[paymentMethod]) {
-      logger.error('Unknown payment method', { data, paymentMethod, callbackMethod });
+      logger.error('Unknown payment method', { data, paymentMethod });
       return {
         method: 'answerCallbackQuery',
         callback_query_id: undefined,
-        text: `❌ Payment method '${callbackMethod}' not recognized. Please try again.`,
+        text: `❌ Payment method '${paymentMethod}' not recognized. Please try again.`,
         show_alert: true
       };
     }
