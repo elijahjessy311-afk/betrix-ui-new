@@ -49,11 +49,10 @@ const CONFIG = {
 
   // StatPal (All Sports Data API - Primary Provider)
   STATPAL: {
-    KEY: process.env.STATPAL_API || process.env.STATPAL_API_KEY || process.env.STATPAL_ACCESS_KEY || '4c9cee6b-cf19-4b68-a122-48120fe855b5',
+    KEY: process.env.STATPAL_API_KEY || process.env.STATPAL_ACCESS_KEY || '4c9cee6b-cf19-4b68-a122-48120fe855b5',
     BASE: process.env.STATPAL_BASE || 'https://statpal.io/api',
     V1: 'v1',
     V2: 'v2',
-    ENABLED: Boolean(process.env.STATPAL_API || process.env.STATPAL_API_KEY || process.env.STATPAL_ACCESS_KEY),
   },
 
   // Telegram
@@ -209,12 +208,5 @@ function validateConfig() {
     throw new Error(`Missing required env vars: ${missing.join(", ")}`);
   }
 }
-
-// Startup initialization configuration
-CONFIG.STARTUP = {
-  FETCH_ON_START: process.env.FETCH_ON_START !== 'false', // Default: true
-  PRIORITY_SPORTS: (process.env.PRIORITY_SPORTS || 'soccer,nfl,nba,cricket,tennis').split(',').map(s => s.trim()),
-  USE_STATPAL_PRIORITY: process.env.USE_STATPAL_PRIORITY !== 'false', // Default: true - use StatPal as primary
-};
 
 export { CONFIG, validateConfig };

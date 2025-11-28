@@ -222,24 +222,6 @@ const basicHandlers = new BotHandlers(telegram, userService, apiFootball, ai, re
   scrapers,
 });
 
-// ===== API BOOTSTRAP: Validate keys and immediately prefetch data =====
-let apiBootstrapSuccess = false;
-try {
-  const apiBootstrap = new APIBootstrap(sportsAggregator, oddsAnalyzer, redis);
-  const bootstrapResult = await apiBootstrap.initialize();
-  apiBootstrapSuccess = bootstrapResult.success;
-  
-  if (bootstrapResult.success) {
-    logger.info('✅ API Bootstrap successful', bootstrapResult.data);
-    // Start continuous prefetch after initial success
-    apiBootstrap.startContinuousPrefetch(Number(process.env.PREFETCH_INTERVAL_SECONDS || 60));
-  } else {
-    logger.warn('⚠️  API Bootstrap warning', bootstrapResult);
-  }
-} catch (e) {
-  logger.warn('API Bootstrap initialization failed', e?.message || String(e));
-}
-
 // Start prefetch scheduler (runs in-worker). Interval controlled by PREFETCH_INTERVAL_SECONDS (default 60s).
 try {
   startPrefetchScheduler({ redis, openLiga, rss: rssAggregator, scorebat: scorebatService, footballData: footballDataService, intervalSeconds: Number(process.env.PREFETCH_INTERVAL_SECONDS || 60) });
@@ -461,19 +443,7 @@ async function handleUpdate(update) {
       const userId = callbackQuery.from?.id;
       const chatId = callbackQuery.message?.chat?.id;
 
-      // Avoid answering callback queries that are already too old (Telegram rejects if >60s)
-      try {
-        const cbMsgDate = callbackQuery.message && (callbackQuery.message.date || callbackQuery.message.edit_date) ? Number(callbackQuery.message.date || callbackQuery.message.edit_date) : null;
-        const ageSec = cbMsgDate ? (Date.now() / 1000 - cbMsgDate) : 0;
-        if (ageSec && ageSec > 55) {
-          logger.info('Skipping initial answerCallback: callback appears too old', { ageSec });
-        } else {
-          await telegram.answerCallback(callbackId, "Processing...");
-        }
-      } catch (e) {
-        // If initial answer fails (rare), continue without blocking the callback handling
-        logger.warn('Initial answerCallback failed, continuing dispatch', e && e.message ? e.message : e);
-      }
+      await telegram.answerCallback(callbackId, "Processing...");
 
       try {
         const services = { openLiga, footballData: footballDataService, rss: rssAggregator, scrapers, sportsAggregator, oddsAnalyzer, multiSportAnalyzer, cache, sportMonks: sportMonksAPI, sportsData: sportsDataAPI };
@@ -501,20 +471,8 @@ async function handleUpdate(update) {
 
             // Answer callback query (quick popup)
             if (method === 'answerCallback' || method === 'answerCallbackQuery' || action.answer) {
-              try {
-                await telegram.answerCallback(callbackId, action.text || '', !!action.show_alert);
-                logger.info('Dispatched answerCallback', { callbackId });
-              } catch (e) {
-                const msg = (e && (e.message || String(e))) || '';
-                // If Telegram rejects because the query is too old, fallback to sending a message to chat
-                if (msg.includes('query is too old') || msg.includes('too old') || msg.includes('Query is too old')) {
-                  logger.info('Callback query too old; falling back to sendMessage', { callbackId });
-                  const target = action.chat_id || chatId;
-                  try { await telegram.sendMessage(target, action.text || '', { parse_mode: action.parse_mode || 'HTML' }); } catch (e2) { logger.warn('Fallback sendMessage failed', e2 && e2.message ? e2.message : e2); }
-                } else {
-                  throw e;
-                }
-              }
+              await telegram.answerCallback(callbackId, action.text || '', !!action.show_alert);
+              logger.info('Dispatched answerCallback', { callbackId });
               continue;
             }
 

@@ -1,8 +1,7 @@
 /**
  * Sports Data Aggregator
  * Fetches and normalizes data from multiple sports APIs with priority order:
- * 0. StatPal (All Sports Data) - Primary source for all sports
- * 1. API-Sports (API-Football) - Primary source for soccer
+ * 1. API-Sports (API-Football) - Primary source
  * 2. Football-Data.org - Secondary source
  * 3. AllSports API (RapidAPI) - Tertiary source
  * 4. SportsData.io - Additional source
@@ -22,8 +21,6 @@ import { getNewsHeadlines } from './news-provider-enhanced.js';
 import liveScraper from './live-scraper.js';
 import { getLiveMatchesFromGoal } from './goal-scraper.js';
 import { getLiveMatchesFromFlashscore, getLiveMatchesByLeagueFromFlashscore } from './flashscore-scraper.js';
-import { ProviderHealth } from '../utils/provider-health.js';
-import StatPalService from './statpal-service.js';
 
 const logger = new Logger('SportsAggregator');
 
@@ -50,8 +47,6 @@ export class SportsAggregator {
     this.scorebat = extras.scorebat || null;
     this.rss = extras.rss || null;
     this.openLiga = extras.openLiga || null;
-    this.statpal = new StatPalService(redis); // Initialize StatPal service
-    this.providerHealth = new ProviderHealth(redis);
     // API-Sports adaptive strategy (will pick the first working strategy)
     this._apiSportsStrategy = null;
     this._apiSportsStrategies = [
@@ -84,8 +79,6 @@ export class SportsAggregator {
       // Non-fatal, just log
       logger.warn(`Failed to write provider health for ${name}`, e?.message || String(e));
     }
-    // provider health circuit-breaker helper
-    this.providerHealth = new ProviderHealth(redis || null);
   }
 
   // Check if a provider is enabled: checks CONFIG.PROVIDERS then optional Redis override
@@ -122,9 +115,6 @@ export class SportsAggregator {
 
       // Try API-Sports first
       if (CONFIG.API_FOOTBALL.KEY) {
-        if (await this.providerHealth.isDisabled('api-sports')) {
-          logger.info('Skipping API-Sports: provider marked disabled by health helper');
-        } else {
         try {
           leagues = await this._getLeaguesFromApiSports(region);
           if (leagues.length > 0) {
@@ -133,8 +123,6 @@ export class SportsAggregator {
           }
         } catch (e) {
           logger.warn('API-Sports league fetch failed', e.message);
-          try { await this.providerHealth.markFailure('api-sports', e.status || e.statusCode || e.code || 0, e.message); } catch (e2) {}
-        }
         }
       }
 
@@ -174,30 +162,6 @@ export class SportsAggregator {
 
       let matches = [];
 
-      // Priority 0: StatPal (All Sports Data) - PRIMARY COMPREHENSIVE SOURCE 🌟
-      if (CONFIG.STATPAL.KEY) {
-        if (await this.providerHealth.isDisabled('statpal-live')) {
-          logger.info('Skipping StatPal: provider marked disabled by health helper');
-        } else {
-          try {
-            const statpalData = await this.statpal.getLiveScores('soccer', 'v1');
-            if (statpalData && statpalData.length > 0) {
-              matches = Array.isArray(statpalData) ? statpalData : (statpalData.data || []);
-              if (matches.length > 0) {
-                logger.info(`✅ StatPal: Found ${matches.length} live matches (soccer)`);
-                this._setCached(cacheKey, matches);
-                await this._recordProviderHealth('statpal', true, `Found ${matches.length} live matches`);
-                return this._formatMatches(matches, 'statpal');
-              }
-            }
-          } catch (e) {
-            logger.warn('StatPal live matches failed', e.message);
-            await this._recordProviderHealth('statpal', false, e.message);
-            try { await this.providerHealth.markFailure('statpal-live', e.statusCode || e.status || 500, e.message); } catch(e2) {}
-          }
-        }
-      }
-
       // Priority 1: API-Sports (API-Football) - Primary source (PROVEN WORKING ✅)
       if (CONFIG.API_FOOTBALL.KEY) {
         try {
@@ -216,9 +180,6 @@ export class SportsAggregator {
 
       // Priority 2: Football-Data.org - Secondary source (needs proper auth headers)
       if (CONFIG.FOOTBALLDATA.KEY) {
-        if (await this.providerHealth.isDisabled('football-data')) {
-          logger.info('Skipping Football-Data: provider marked disabled by health helper');
-        } else {
         try {
           matches = await this._getLiveFromFootballData(leagueId);
           if (matches.length > 0) {
@@ -230,16 +191,11 @@ export class SportsAggregator {
         } catch (e) {
           logger.warn('Football-Data live matches failed', e.message);
           await this._recordProviderHealth('football-data', false, e.message);
-          try { await this.providerHealth.markFailure('football-data', e.status || e.statusCode || e.code || 0, e.message); } catch(e2) {}
-        }
         }
       }
 
       // Priority 3: SportsData.io (HTTP 404 errors - needs endpoint verification)
       if (CONFIG.SPORTSDATA.KEY) {
-        if (await this.providerHealth.isDisabled('sportsdata')) {
-          logger.info('Skipping SportsData.io: provider marked disabled by health helper');
-        } else {
         try {
           matches = await this._getLiveFromSportsData();
           if (matches.length > 0) {
@@ -251,16 +207,11 @@ export class SportsAggregator {
         } catch (e) {
           logger.warn('SportsData.io live matches failed', e.message);
           await this._recordProviderHealth('sportsdata', false, e.message);
-          try { await this.providerHealth.markFailure('sportsdata', e.status || e.statusCode || e.code || 0, e.message); } catch(e2) {}
-        }
         }
       }
 
       // Priority 4: SportsMonks (certificate hostname mismatch - needs TLS config)
       if (CONFIG.SPORTSMONKS.KEY) {
-        if (await this.providerHealth.isDisabled('sportsmonks')) {
-          logger.info('Skipping SportsMonks: provider marked disabled by health helper');
-        } else {
         try {
           matches = await this._getLiveFromSportsMonks();
           if (matches.length > 0) {
@@ -272,16 +223,11 @@ export class SportsAggregator {
         } catch (e) {
           logger.warn('SportsMonks live matches failed', e.message);
           await this._recordProviderHealth('sportsmonks', false, e.message);
-          try { await this.providerHealth.markFailure('sportsmonks', e.status || e.statusCode || e.code || 0, e.message); } catch(e2) {}
-        }
         }
       }
 
       // Priority 5: SofaScore - Real-time data
       if (CONFIG.SOFASCORE.KEY) {
-        if (await this.providerHealth.isDisabled('sofascore')) {
-          logger.info('Skipping SofaScore: provider marked disabled by health helper');
-        } else {
         try {
           matches = await this._getLiveFromSofaScore();
           if (matches.length > 0) {
@@ -293,16 +239,11 @@ export class SportsAggregator {
         } catch (e) {
           logger.warn('SofaScore live matches failed', e.message);
           await this._recordProviderHealth('sofascore', false, e.message);
-          try { await this.providerHealth.markFailure('sofascore', e.status || e.statusCode || e.code || 0, e.message); } catch(e2) {}
-        }
         }
       }
 
       // Priority 6: AllSports API
       if (await this._isProviderEnabled('ALLSPORTS') && CONFIG.ALLSPORTS.KEY) {
-        if (await this.providerHealth.isDisabled('allsports')) {
-          logger.info('Skipping AllSports: provider marked disabled by health helper');
-        } else {
         try {
           matches = await this._getLiveFromAllSports();
           if (matches.length > 0) {
@@ -314,16 +255,11 @@ export class SportsAggregator {
         } catch (e) {
           logger.warn('AllSports live matches failed', e.message);
           await this._recordProviderHealth('allsports', false, e.message);
-          try { await this.providerHealth.markFailure('allsports', e.status || e.statusCode || e.code || 0, e.message); } catch(e2) {}
-        }
         }
       }
 
       // Priority 7: ScoreBat free highlights/feed (no API key required)
       if (await this._isProviderEnabled('SCOREBAT') && this.scorebat) {
-        if (await this.providerHealth.isDisabled('scorebat')) {
-          logger.info('Skipping ScoreBat: provider marked disabled by health helper');
-        } else {
         try {
           let sb = null;
           try {
@@ -333,7 +269,7 @@ export class SportsAggregator {
             sb = await this.scorebat.featured().catch(() => null);
           }
           const items = (sb && (sb.response || sb)) || sb;
-            if (items && items.length > 0) {
+          if (items && items.length > 0) {
             // map ScoreBat entries to minimal match objects
             const mapped = items.slice(0, 10).map(it => {
               const title = it.title || it.match || it.videotitle || '';
@@ -365,12 +301,10 @@ export class SportsAggregator {
             this._setCached(cacheKey, enriched);
             await this._recordProviderHealth('scorebat', true, `Found ${enriched.length} feed entries`);
             return this._formatMatches(enriched, 'scorebat');
-            }
+          }
         } catch (e) {
           logger.warn('ScoreBat feed failed', e.message);
           await this._recordProviderHealth('scorebat', false, e.message);
-          try { await this.providerHealth.markFailure('scorebat', e.status || e.statusCode || e.code || 0, e.message); } catch(e2) {}
-        }
         }
       }
       
@@ -423,47 +357,37 @@ export class SportsAggregator {
 
       // Priority 10: Goal.com public scraper (no API key required)
       if (await this._isProviderEnabled('GOAL')) {
-        if (await this.providerHealth.isDisabled('goal')) {
-          logger.info('Skipping Goal.com scraper: provider marked disabled by health helper');
-        } else {
-          try {
-            const leagueMap = { '39': 'premier-league', '140': 'la-liga', '135': 'serie-a', '78': 'bundesliga', '61': 'ligue-1' };
-            const leaguePath = leagueMap[String(leagueId)] || 'premier-league';
-            const goalMatches = await getLiveMatchesFromGoal(leaguePath);
-            if (goalMatches && goalMatches.length > 0) {
-              logger.info(`✅ Goal.com: Found ${goalMatches.length} matches`);
-              this._setCached(cacheKey, goalMatches);
-              await this._recordProviderHealth('goal', true, `Found ${goalMatches.length} matches`);
-              return this._formatMatches(goalMatches, 'goal');
-            }
-          } catch (e) {
-            logger.warn('Goal.com scraper failed', e.message);
-            await this._recordProviderHealth('goal', false, e.message);
-            try { await this.providerHealth.markFailure('goal', e.status || e.statusCode || e.code || 0, e.message); } catch(e2) {}
+        try {
+          const leagueMap = { '39': 'premier-league', '140': 'la-liga', '135': 'serie-a', '78': 'bundesliga', '61': 'ligue-1' };
+          const leaguePath = leagueMap[String(leagueId)] || 'premier-league';
+          const goalMatches = await getLiveMatchesFromGoal(leaguePath);
+          if (goalMatches && goalMatches.length > 0) {
+            logger.info(`✅ Goal.com: Found ${goalMatches.length} matches`);
+            this._setCached(cacheKey, goalMatches);
+            await this._recordProviderHealth('goal', true, `Found ${goalMatches.length} matches`);
+            return this._formatMatches(goalMatches, 'goal');
           }
+        } catch (e) {
+          logger.warn('Goal.com scraper failed', e.message);
+          await this._recordProviderHealth('goal', false, e.message);
         }
       }
 
       // Priority 11: Flashscore public scraper (no API key required)
       if (await this._isProviderEnabled('FLASHSCORE')) {
-        if (await this.providerHealth.isDisabled('flashscore')) {
-          logger.info('Skipping Flashscore scraper: provider marked disabled by health helper');
-        } else {
-          try {
-            const flashscoreLeagueMap = { '39': '17', '140': '87', '135': '106', '78': '34', '61': '53' };
-            const flashLeagueId = flashscoreLeagueMap[String(leagueId)] || '17';
-            const flashMatches = await getLiveMatchesByLeagueFromFlashscore(flashLeagueId);
-            if (flashMatches && flashMatches.length > 0) {
-              logger.info(`✅ Flashscore: Found ${flashMatches.length} matches`);
-              this._setCached(cacheKey, flashMatches);
-              await this._recordProviderHealth('flashscore', true, `Found ${flashMatches.length} matches`);
-              return this._formatMatches(flashMatches, 'flashscore');
-            }
-          } catch (e) {
-            logger.warn('Flashscore scraper failed', e.message);
-            await this._recordProviderHealth('flashscore', false, e.message);
-            try { await this.providerHealth.markFailure('flashscore', e.status || e.statusCode || e.code || 0, e.message); } catch(e2) {}
+        try {
+          const flashscoreLeagueMap = { '39': '17', '140': '87', '135': '106', '78': '34', '61': '53' };
+          const flashLeagueId = flashscoreLeagueMap[String(leagueId)] || '17';
+          const flashMatches = await getLiveMatchesByLeagueFromFlashscore(flashLeagueId);
+          if (flashMatches && flashMatches.length > 0) {
+            logger.info(`✅ Flashscore: Found ${flashMatches.length} matches`);
+            this._setCached(cacheKey, flashMatches);
+            await this._recordProviderHealth('flashscore', true, `Found ${flashMatches.length} matches`);
+            return this._formatMatches(flashMatches, 'flashscore');
           }
+        } catch (e) {
+          logger.warn('Flashscore scraper failed', e.message);
+          await this._recordProviderHealth('flashscore', false, e.message);
         }
       }
 
@@ -1320,155 +1244,6 @@ export class SportsAggregator {
       { position: 4, team: 'Chelsea', played: 10, won: 5, drawn: 3, lost: 2, points: 18 },
       { position: 5, team: 'Newcastle', played: 10, drawn: 4, won: 4, lost: 2, points: 16 }
     ];
-  }
-
-  // ==================== StatPal (All Sports Data API) ====================
-
-  /**
-   * Get live matches from StatPal for any sport
-   * @param {string} sport - Sport name (soccer, nfl, nba, nhl, mlb, cricket, etc.)
-   * @param {string} version - API version (v1 or v2)
-   */
-  async _getLiveFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getLiveScores(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} live error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get odds from StatPal for any sport
-   * @param {string} sport - Sport name
-   * @param {string} version - API version
-   */
-  async _getOddsFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getLiveOdds(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} odds error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get fixtures from StatPal for any sport
-   * @param {string} sport - Sport name
-   * @param {string} version - API version
-   */
-  async _getFixturesFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getFixtures(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} fixtures error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get standings from StatPal for any sport
-   * @param {string} sport - Sport name
-   * @param {string} league - League ID (optional)
-   * @param {string} version - API version
-   */
-  async _getStandingsFromStatPal(sport = 'soccer', league = null, version = 'v1') {
-    try {
-      const data = await this.statpal.getStandings(sport, league, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} standings error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get player statistics from StatPal
-   * @param {string} sport - Sport name
-   * @param {string} playerId - Player ID
-   * @param {string} version - API version
-   */
-  async _getPlayerStatsFromStatPal(sport = 'soccer', playerId, version = 'v1') {
-    try {
-      const data = await this.statpal.getPlayerStats(sport, playerId, version);
-      if (!data) return null;
-      return data;
-    } catch (e) {
-      logger.error(`StatPal player ${playerId} stats error:`, e.message);
-      return null;
-    }
-  }
-
-  /**
-   * Get team statistics from StatPal
-   * @param {string} sport - Sport name
-   * @param {string} teamId - Team ID
-   * @param {string} version - API version
-   */
-  async _getTeamStatsFromStatPal(sport = 'soccer', teamId, version = 'v1') {
-    try {
-      const data = await this.statpal.getTeamStats(sport, teamId, version);
-      if (!data) return null;
-      return data;
-    } catch (e) {
-      logger.error(`StatPal team ${teamId} stats error:`, e.message);
-      return null;
-    }
-  }
-
-  /**
-   * Get injury reports from StatPal
-   * @param {string} sport - Sport name
-   * @param {string} version - API version
-   */
-  async _getInjuriesFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getInjuries(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} injuries error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get results (past matches) from StatPal
-   * @param {string} sport - Sport name
-   * @param {string} version - API version
-   */
-  async _getResultsFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getResults(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} results error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get scoring leaders from StatPal
-   * @param {string} sport - Sport name
-   * @param {string} version - API version
-   */
-  async _getScoringLeadersFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getScoringLeaders(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} scoring leaders error:`, e.message);
-      return [];
-    }
   }
 }
 

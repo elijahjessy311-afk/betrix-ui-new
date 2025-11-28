@@ -210,11 +210,4 @@ function validateConfig() {
   }
 }
 
-// Startup initialization configuration
-CONFIG.STARTUP = {
-  FETCH_ON_START: process.env.FETCH_ON_START !== 'false', // Default: true
-  PRIORITY_SPORTS: (process.env.PRIORITY_SPORTS || 'soccer,nfl,nba,cricket,tennis').split(',').map(s => s.trim()),
-  USE_STATPAL_PRIORITY: process.env.USE_STATPAL_PRIORITY !== 'false', // Default: true - use StatPal as primary
-};
-
 export { CONFIG, validateConfig };
