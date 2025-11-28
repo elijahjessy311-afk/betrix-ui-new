@@ -887,23 +887,49 @@ export class SportsAggregator {
 
   // ==================== Utilities ====================
 
-  async _fetchWithRetry(url, options, retries = 2) {
-    for (let i = 0; i < retries; i++) {
+  async _fetchWithRetry(url, options = {}, retries = 3) {
+    let attempt = 0;
+    let lastErr = null;
+    while (attempt < retries) {
       try {
-        const response = await fetch(url, options);
-        if (response.ok) {
-          return await response.json();
+        attempt += 1;
+        const resp = await fetch(url, options);
+        if (resp && resp.ok) {
+          try {
+            return await resp.json();
+          } catch (parseErr) {
+            // if JSON parse fails, return raw text as fallback
+            const txt = await resp.text().catch(() => null);
+            logger.warn(`Failed to parse JSON from ${url}, returning text fallback`);
+            return txt;
+          }
         }
-        if (response.status === 429) {
-          await new Promise(r => setTimeout(r, 1000)); // Rate limited, retry
+
+        if (resp && resp.status === 429) {
+          const wait = Math.min(5000, 500 * attempt);
+          logger.warn(`Rate limited by ${url}, retrying after ${wait}ms`);
+          await new Promise(r => setTimeout(r, wait));
           continue;
         }
-        throw new Error(`HTTP ${response.status}`);
+
+        // For 4xx/5xx errors, capture status and body for diagnostic logs
+        const body = await resp.text().catch(() => null);
+        const err = new Error(`HTTP ${resp.status} ${resp.statusText} - ${body ? body.substring(0, 200) : ''}`);
+        lastErr = err;
+        // exponential backoff
+        const backoff = Math.min(2000 * attempt, 8000);
+        await new Promise(r => setTimeout(r, backoff));
+        continue;
       } catch (e) {
-        if (i === retries - 1) throw e;
-        await new Promise(r => setTimeout(r, 500));
+        lastErr = e;
+        if (attempt >= retries) break;
+        const backoff = Math.min(500 * attempt, 3000);
+        await new Promise(r => setTimeout(r, backoff));
       }
     }
+    // All attempts exhausted
+    logger.warn(`_fetchWithRetry failed for ${url}: ${lastErr?.message || lastErr}`);
+    throw lastErr || new Error('Fetch failed');
   }
 
   _setCached(key, data) {
@@ -951,35 +977,132 @@ export class SportsAggregator {
 
   _formatMatches(matches, source) {
     return matches.map(m => {
-      if (source === 'openligadb') {
-        return m; // already normalized
-      }
+      // already normalized from OpenLiga
+      if (source === 'openligadb') return m;
+
+      // helper to safely extract nested values and coerce to string where appropriate
+      const safe = (val, fallback = 'TBA') => {
+        try {
+          if (val === null || typeof val === 'undefined') return fallback;
+          if (typeof val === 'string' || typeof val === 'number') return String(val);
+          if (typeof val === 'object') {
+            // if object contains common fields, try those
+            if (val.name) return String(val.name);
+            if (val.fullName) return String(val.fullName);
+            return JSON.stringify(val);
+          }
+          return String(val);
+        } catch (e) {
+          return fallback;
+        }
+      };
+
       if (source === 'api-sports') {
         return {
-          id: m.fixture.id,
-          home: m.teams.home.name,
-          away: m.teams.away.name,
-          homeScore: m.goals.home,
-          awayScore: m.goals.away,
-          status: m.fixture.status,
-          time: m.fixture.status === 'LIVE' ? `${m.fixture.elapsed}'` : m.fixture.date,
-          venue: m.fixture.venue?.name || 'TBA'
+          id: (m.fixture && (m.fixture.id || m.fixture.fixture_id)) || m.id || null,
+          home: safe(m.teams && m.teams.home && m.teams.home.name, 'Home'),
+          away: safe(m.teams && m.teams.away && m.teams.away.name, 'Away'),
+          homeScore: (m.goals && (typeof m.goals.home === 'number' ? m.goals.home : (m.goals.home || null))) || (m.score && m.score.fulltime && m.score.fulltime.home) || null,
+          awayScore: (m.goals && (typeof m.goals.away === 'number' ? m.goals.away : (m.goals.away || null))) || (m.score && m.score.fulltime && m.score.fulltime.away) || null,
+          status: safe(m.fixture && (m.fixture.status && (m.fixture.status.long || m.fixture.status.short || m.fixture.status))),
+          time: (m.fixture && m.fixture.status === 'LIVE' && m.fixture.elapsed) ? `${m.fixture.elapsed}'` : safe(m.fixture && (m.fixture.date || m.fixture.timestamp), 'TBA'),
+          venue: safe(m.fixture && m.fixture.venue && m.fixture.venue.name, 'TBA'),
+          provider: 'api-sports',
+          raw: m
         };
       }
+
       if (source === 'football-data') {
         return {
-          id: m.id,
-          home: m.homeTeam.name,
-          away: m.awayTeam.name,
-          homeScore: m.score.fullTime.home,
-          awayScore: m.score.fullTime.away,
-          status: m.status,
-          time: m.status === 'LIVE' ? `${m.minute}'` : m.utcDate,
-          venue: m.venue || 'TBA'
+          id: m.id || null,
+          home: safe(m.homeTeam && m.homeTeam.name, 'Home'),
+          away: safe(m.awayTeam && m.awayTeam.name, 'Away'),
+          homeScore: (m.score && m.score.fullTime && (typeof m.score.fullTime.home === 'number' ? m.score.fullTime.home : null)) || null,
+          awayScore: (m.score && m.score.fullTime && (typeof m.score.fullTime.away === 'number' ? m.score.fullTime.away : null)) || null,
+          status: safe(m.status, 'UNKNOWN'),
+          time: (m.status === 'LIVE' && m.minute) ? `${m.minute}'` : safe(m.utcDate, 'TBA'),
+          venue: safe(m.venue, 'TBA'),
+          provider: 'football-data',
+          raw: m
         };
       }
-      return m;
+
+      // ESPN provider (home/away are objects with {name, score} shape)
+      if (source === 'espn') {
+        return {
+          id: m.id || null,
+          home: safe(m.home && m.home.name, 'Home'),
+          away: safe(m.away && m.away.name, 'Away'),
+          homeScore: (m.home && typeof m.home.score === 'number') ? m.home.score : null,
+          awayScore: (m.away && typeof m.away.score === 'number') ? m.away.score : null,
+          status: safe(m.status, 'UNKNOWN'),
+          time: safe(m.startTime || m.date, 'TBA'),
+          league: m.league || 'ESPN',
+          provider: 'espn',
+          raw: m
+        };
+      }
+
+      // default: try to coerce obvious fields and return a safe minimal object
+      return {
+        id: m.id || m.fixture?.id || null,
+        home: safe(m.home || (m.teams && m.teams.home && m.teams.home.name) || (m.title && m.title.split && String(m.title).split(' - ')[0]) , 'Home'),
+        away: safe(m.away || (m.teams && m.teams.away && m.teams.away.name) || (m.title && m.title.split && String(m.title).split(' - ')[1]) , 'Away'),
+        homeScore: (m.homeScore || m.goals?.home || null),
+        awayScore: (m.awayScore || m.goals?.away || null),
+        status: safe(m.status || (m.fixture && m.fixture.status) || 'UNKNOWN'),
+        time: safe(m.time || (m.fixture && m.fixture.elapsed) || m.date || 'TBA'),
+        venue: safe(m.venue || (m.fixture && m.fixture.venue && m.fixture.venue.name) || 'TBA'),
+        provider: source || 'unknown',
+        raw: m
+      };
     });
+  }
+
+  /**
+   * Lightweight health check for the primary provider (API-Sports)
+   * Returns an object { apiSports: boolean, reason?: string }
+   */
+  async checkPrimaryProviderHealth() {
+    if (!CONFIG.API_FOOTBALL || !CONFIG.API_FOOTBALL.KEY) {
+      await this._recordProviderHealth('api-sports', false, 'API key not configured');
+      return { apiSports: false, reason: 'no_api_key' };
+    }
+
+    try {
+      // Attempt a small, low-cost request (leagues) to verify connectivity
+      const resp = await this._fetchApiSports('/leagues', {}, 1);
+      const count = (resp && (resp.response || resp.leagues || [])).length || 0;
+      const ok = count >= 0;
+      await this._recordProviderHealth('api-sports', ok, `leagues:${count}`);
+      return { apiSports: ok, reason: ok ? 'ok' : 'no_data' };
+    } catch (e) {
+      await this._recordProviderHealth('api-sports', false, e?.message || String(e));
+      return { apiSports: false, reason: e?.message || String(e) };
+    }
+  }
+
+  /**
+   * Convenience: check whether live feed appears healthy based on cached provider health
+   */
+  async isLiveFeedHealthy() {
+    try {
+      if (!this.redis) {
+        // If no redis present, run a primary provider health check
+        const r = await this.checkPrimaryProviderHealth();
+        return r.apiSports === true;
+      }
+      const key = `${CONFIG.DIAGNOSTICS.PREFIX}api-sports`;
+      const raw = await this.redis.get(key).catch(() => null);
+      if (!raw) {
+        const r = await this.checkPrimaryProviderHealth();
+        return r.apiSports === true;
+      }
+      const parsed = JSON.parse(raw);
+      return Boolean(parsed && parsed.ok);
+    } catch (e) {
+      return false;
+    }
   }
 
   _getDemoMatches() {
