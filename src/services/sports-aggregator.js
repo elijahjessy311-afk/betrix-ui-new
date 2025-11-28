@@ -391,12 +391,12 @@ export class SportsAggregator {
         }
       }
 
-      // Fallback to demo data
-      logger.warn('All live APIs failed, using demo data');
-      return this._getDemoMatches();
+      // No real data available - return empty instead of fake data
+      logger.warn('All live APIs failed, returning empty match list');
+      return [];
     } catch (err) {
       logger.error('getLiveMatches failed', err);
-      return this._getDemoMatches();
+      return [];
     }
   }
 
@@ -523,12 +523,12 @@ export class SportsAggregator {
         }
       }
 
-      // Fallback to demo data
-      logger.warn('All odds APIs failed, using demo data');
-      return this._getDemoOdds();
+      // No real data available - return empty instead of fake data
+      logger.warn('All odds APIs failed, returning empty odds list');
+      return [];
     } catch (err) {
       logger.error('getOdds failed', err);
-      return this._getDemoOdds();
+      return [];
     }
   }
 
@@ -603,12 +603,12 @@ export class SportsAggregator {
         }
       }
 
-      // Fallback to demo data
-      logger.warn('All standings APIs failed, using demo data');
-      return this._getDemoStandings();
+      // No real data available - return empty instead of fake data
+      logger.warn('All standings APIs failed, returning empty standings list');
+      return [];
     } catch (err) {
       logger.error('getStandings failed', err);
-      return this._getDemoStandings();
+      return [];
     }
   }
 
