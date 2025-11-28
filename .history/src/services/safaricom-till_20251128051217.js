@@ -37,6 +37,7 @@ class SafaricomTillService {
       `4️⃣ Enter Till: <code>${this.tillNumber}</code>\n` +
       `5️⃣ Enter Amount: <code>KES ${amount}</code>\n` +
       `6️⃣ Enter Account: <code>${this.accountName} - ${tierNames[tier] || "BETRIX"}</code>\n` +
+      (this.storeNumber ? `7️⃣ Optional Store Number: <code>${this.storeNumber}</code>\n` : ``) +
       `7️⃣ Enter your M-Pesa PIN\n` +
       `8️⃣ Confirmation sent\n\n` +
       `✅ Access activated instantly\n\n` +
@@ -169,6 +170,7 @@ class SafaricomTillService {
     return (
       `📊 <b>BETRIX Till Account</b>\n\n` +
       `Till Number: <code>${this.tillNumber}</code>\n` +
+      (this.storeNumber ? `Store Number: <code>${this.storeNumber}</code>\n` : ``) +
       `Business: ${this.accountName}\n` +
       `Type: M-Pesa Merchant Till\n` +
       `Method: Lipa na M-Pesa\n\n` +

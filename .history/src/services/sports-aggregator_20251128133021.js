@@ -1,8 +1,7 @@
 /**
  * Sports Data Aggregator
  * Fetches and normalizes data from multiple sports APIs with priority order:
- * 0. StatPal (All Sports Data) - Primary source for all sports
- * 1. API-Sports (API-Football) - Primary source for soccer
+ * 1. API-Sports (API-Football) - Primary source
  * 2. Football-Data.org - Secondary source
  * 3. AllSports API (RapidAPI) - Tertiary source
  * 4. SportsData.io - Additional source
@@ -23,7 +22,6 @@ import liveScraper from './live-scraper.js';
 import { getLiveMatchesFromGoal } from './goal-scraper.js';
 import { getLiveMatchesFromFlashscore, getLiveMatchesByLeagueFromFlashscore } from './flashscore-scraper.js';
 import { ProviderHealth } from '../utils/provider-health.js';
-import StatPalService from './statpal-service.js';
 
 const logger = new Logger('SportsAggregator');
 
@@ -50,8 +48,6 @@ export class SportsAggregator {
     this.scorebat = extras.scorebat || null;
     this.rss = extras.rss || null;
     this.openLiga = extras.openLiga || null;
-    this.statpal = new StatPalService(redis); // Initialize StatPal service
-    this.providerHealth = new ProviderHealth(redis);
     // API-Sports adaptive strategy (will pick the first working strategy)
     this._apiSportsStrategy = null;
     this._apiSportsStrategies = [
@@ -173,30 +169,6 @@ export class SportsAggregator {
       }
 
       let matches = [];
-
-      // Priority 0: StatPal (All Sports Data) - PRIMARY COMPREHENSIVE SOURCE 🌟
-      if (CONFIG.STATPAL.KEY) {
-        if (await this.providerHealth.isDisabled('statpal-live')) {
-          logger.info('Skipping StatPal: provider marked disabled by health helper');
-        } else {
-          try {
-            const statpalData = await this.statpal.getLiveScores('soccer', 'v1');
-            if (statpalData && statpalData.length > 0) {
-              matches = Array.isArray(statpalData) ? statpalData : (statpalData.data || []);
-              if (matches.length > 0) {
-                logger.info(`✅ StatPal: Found ${matches.length} live matches (soccer)`);
-                this._setCached(cacheKey, matches);
-                await this._recordProviderHealth('statpal', true, `Found ${matches.length} live matches`);
-                return this._formatMatches(matches, 'statpal');
-              }
-            }
-          } catch (e) {
-            logger.warn('StatPal live matches failed', e.message);
-            await this._recordProviderHealth('statpal', false, e.message);
-            try { await this.providerHealth.markFailure('statpal-live', e.statusCode || e.status || 500, e.message); } catch(e2) {}
-          }
-        }
-      }
 
       // Priority 1: API-Sports (API-Football) - Primary source (PROVEN WORKING ✅)
       if (CONFIG.API_FOOTBALL.KEY) {
@@ -1320,155 +1292,6 @@ export class SportsAggregator {
       { position: 4, team: 'Chelsea', played: 10, won: 5, drawn: 3, lost: 2, points: 18 },
       { position: 5, team: 'Newcastle', played: 10, drawn: 4, won: 4, lost: 2, points: 16 }
     ];
-  }
-
-  // ==================== StatPal (All Sports Data API) ====================
-
-  /**
-   * Get live matches from StatPal for any sport
-   * @param {string} sport - Sport name (soccer, nfl, nba, nhl, mlb, cricket, etc.)
-   * @param {string} version - API version (v1 or v2)
-   */
-  async _getLiveFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getLiveScores(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} live error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get odds from StatPal for any sport
-   * @param {string} sport - Sport name
-   * @param {string} version - API version
-   */
-  async _getOddsFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getLiveOdds(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} odds error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get fixtures from StatPal for any sport
-   * @param {string} sport - Sport name
-   * @param {string} version - API version
-   */
-  async _getFixturesFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getFixtures(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} fixtures error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get standings from StatPal for any sport
-   * @param {string} sport - Sport name
-   * @param {string} league - League ID (optional)
-   * @param {string} version - API version
-   */
-  async _getStandingsFromStatPal(sport = 'soccer', league = null, version = 'v1') {
-    try {
-      const data = await this.statpal.getStandings(sport, league, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} standings error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get player statistics from StatPal
-   * @param {string} sport - Sport name
-   * @param {string} playerId - Player ID
-   * @param {string} version - API version
-   */
-  async _getPlayerStatsFromStatPal(sport = 'soccer', playerId, version = 'v1') {
-    try {
-      const data = await this.statpal.getPlayerStats(sport, playerId, version);
-      if (!data) return null;
-      return data;
-    } catch (e) {
-      logger.error(`StatPal player ${playerId} stats error:`, e.message);
-      return null;
-    }
-  }
-
-  /**
-   * Get team statistics from StatPal
-   * @param {string} sport - Sport name
-   * @param {string} teamId - Team ID
-   * @param {string} version - API version
-   */
-  async _getTeamStatsFromStatPal(sport = 'soccer', teamId, version = 'v1') {
-    try {
-      const data = await this.statpal.getTeamStats(sport, teamId, version);
-      if (!data) return null;
-      return data;
-    } catch (e) {
-      logger.error(`StatPal team ${teamId} stats error:`, e.message);
-      return null;
-    }
-  }
-
-  /**
-   * Get injury reports from StatPal
-   * @param {string} sport - Sport name
-   * @param {string} version - API version
-   */
-  async _getInjuriesFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getInjuries(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} injuries error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get results (past matches) from StatPal
-   * @param {string} sport - Sport name
-   * @param {string} version - API version
-   */
-  async _getResultsFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getResults(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} results error:`, e.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get scoring leaders from StatPal
-   * @param {string} sport - Sport name
-   * @param {string} version - API version
-   */
-  async _getScoringLeadersFromStatPal(sport = 'soccer', version = 'v1') {
-    try {
-      const data = await this.statpal.getScoringLeaders(sport, version);
-      if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      logger.error(`StatPal ${sport} scoring leaders error:`, e.message);
-      return [];
-    }
   }
 }
 
