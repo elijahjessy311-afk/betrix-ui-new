@@ -85,7 +85,7 @@ export class SportsAggregator {
       logger.warn(`Failed to write provider health for ${name}`, e?.message || String(e));
     }
     // provider health circuit-breaker helper
-    this.providerHealth = new ProviderHealth(redis || null);
+    this.providerHealth = new ProviderHealth(this.redis || null);
   }
 
   // Check if a provider is enabled: checks CONFIG.PROVIDERS then optional Redis override
