@@ -52,7 +52,7 @@ export class SportsAggregator {
     this._apiSportsStrategies = [
       {
         name: 'rapidapi',
-        base: CONFIG.API_FOOTBALL.BASE || 'https://api-football-v3.p.rapidapi.com',
+        base: 'https://api-football-v3.p.rapidapi.com',
         headers: () => ({
           'x-rapidapi-key': CONFIG.API_FOOTBALL.KEY,
           'x-rapidapi-host': 'api-football-v3.p.rapidapi.com'
@@ -60,7 +60,7 @@ export class SportsAggregator {
       },
       {
         name: 'apisports-direct',
-        base: process.env.API_FOOTBALL_BASE || 'https://v3.football.api-sports.io',
+        base: 'https://v3.football.api-sports.io',
         headers: () => ({
           'x-apisports-key': CONFIG.API_FOOTBALL.KEY
         })
@@ -620,6 +620,11 @@ export class SportsAggregator {
    * caches the successful strategy for subsequent calls.
    */
   async _fetchApiSports(path, options = {}, retries = 2) {
+    // Check if API key is configured
+    if (!CONFIG.API_FOOTBALL.KEY) {
+      throw new Error('API_FOOTBALL_KEY or API_SPORTS_KEY environment variable not set');
+    }
+
     const lastError = { err: null };
 
     // If we already determined a working strategy, try it first
