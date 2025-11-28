@@ -159,31 +159,110 @@ export class APIBootstrap {
   }
 
   /**
-   * Immediately prefetch upcoming fixtures from all providers
-   * NOTE: This is a stub - upcoming fixtures are handled by the main prefetch scheduler
+   * Immediately prefetch upcoming fixtures from StatPal for common leagues
    */
   async prefetchUpcomingFixtures() {
-    logger.info('🔄 Upcoming fixtures are handled by prefetch scheduler (skipping immediate prefetch)');
+    logger.info('🔄 Starting immediate upcoming fixtures prefetch from StatPal...');
     
-    return {
+    const leagueIds = [39, 140, 135, 61, 78, 2]; // Premier League, La Liga, Serie A, Ligue 1, Bundesliga, Champions League
+    const results = {
       timestamp: new Date().toISOString(),
-      status: 'deferred_to_scheduler',
       leagues: {}
     };
+
+    for (const leagueId of leagueIds) {
+      try {
+        // Call StatPal fixtures endpoint via aggregator
+        const fixtures = await this.sportsAggregator._getFixturesFromStatPal('soccer', 'v1');
+        
+        // Filter to only upcoming fixtures for this league (if fixtures have league info)
+        let filtered = fixtures;
+        if (fixtures && Array.isArray(fixtures)) {
+          filtered = fixtures.filter(f => {
+            const fLeagueId = f.league?.id || f.competition?.id;
+            return !fLeagueId || fLeagueId === leagueId || fLeagueId === String(leagueId);
+          });
+        }
+
+        results.leagues[leagueId] = {
+          count: filtered ? filtered.length : 0,
+          fixtures: filtered ? filtered.slice(0, 2) : []
+        };
+        
+        if (filtered && filtered.length > 0) {
+          logger.info(`✅ League ${leagueId}: Found ${filtered.length} upcoming fixtures`, {
+            samples: filtered.slice(0, 2).map(f => ({ home: f.home, away: f.away, status: f.status }))
+          });
+        }
+      } catch (e) {
+        results.leagues[leagueId] = { error: e.message, count: 0 };
+        logger.debug(`⚠️  League ${leagueId}: Failed to fetch upcoming fixtures`, e?.message);
+      }
+    }
+
+    // Store results in Redis for UI access
+    try {
+      await this.redis.set('betrix:prefetch:fixtures:latest', JSON.stringify(results), 'EX', 600);
+    } catch (e) {
+      logger.warn('Failed to store upcoming fixtures prefetch results', e?.message);
+    }
+
+    return results;
   }
 
   /**
-   * Immediately prefetch odds from all providers
-   * NOTE: This is a stub - odds are handled by the main odds analyzer
+   * Immediately prefetch odds from StatPal for common leagues
    */
   async prefetchOdds() {
-    logger.info('🔄 Odds are handled by odds analyzer (skipping immediate prefetch)');
+    logger.info('🔄 Starting immediate odds prefetch from StatPal...');
     
-    return {
+    const leagueIds = [39, 140, 135, 61, 78, 2]; // Premier League, La Liga, Serie A, Ligue 1, Bundesliga, Champions League
+    const results = {
       timestamp: new Date().toISOString(),
-      status: 'deferred_to_analyzer',
       leagues: {}
     };
+
+    for (const leagueId of leagueIds) {
+      try {
+        // Call StatPal odds endpoint via aggregator
+        const odds = await this.sportsAggregator._getOddsFromStatPal('soccer', 'v1');
+        
+        // Filter to only odds for this league (if odds have league/fixture info)
+        let filtered = odds;
+        if (odds && Array.isArray(odds)) {
+          filtered = odds.filter(o => {
+            const oLeagueId = o.league?.id || o.fixture?.league?.id || o.competition?.id;
+            return !oLeagueId || oLeagueId === leagueId || oLeagueId === String(leagueId);
+          });
+        }
+
+        results.leagues[leagueId] = {
+          count: filtered ? filtered.length : 0,
+          odds: filtered ? filtered.slice(0, 2) : []
+        };
+        
+        if (filtered && filtered.length > 0) {
+          logger.info(`✅ League ${leagueId}: Found ${filtered.length} odds entries`, {
+            samples: filtered.slice(0, 2).map(o => ({ 
+              fixtureId: o.fixtureId, 
+              bookmakers: o.bookmakers ? o.bookmakers.length : 0 
+            }))
+          });
+        }
+      } catch (e) {
+        results.leagues[leagueId] = { error: e.message, count: 0 };
+        logger.debug(`⚠️  League ${leagueId}: Failed to fetch odds`, e?.message);
+      }
+    }
+
+    // Store results in Redis for UI access
+    try {
+      await this.redis.set('betrix:prefetch:odds:latest', JSON.stringify(results), 'EX', 600);
+    } catch (e) {
+      logger.warn('Failed to store odds prefetch results', e?.message);
+    }
+
+    return results;
   }
 
   /**
