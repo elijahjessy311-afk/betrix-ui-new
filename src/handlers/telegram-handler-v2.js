@@ -173,6 +173,105 @@ function normalizeStandingsOpenLiga(table) {
 }
 
 /**
+ * Helper: Fetch live matches for a sport from Redis cache (if available),
+ * otherwise fall back to real-time aggregator fetch
+ */
+async function getLiveMatchesBySport(sport, redis, sportsAggregator) {
+  try {
+    // Try to fetch from prefetch cache first
+    const cacheKey = 'betrix:prefetch:live:by-sport';
+    const cached = await redis.get(cacheKey).catch(() => null);
+    if (cached) {
+      try {
+        const data = JSON.parse(cached);
+        if (data.sports && data.sports[sport] && data.sports[sport].samples) {
+          logger.info(`📦 Got cached ${sport} matches from prefetch (${data.sports[sport].count} total)`);
+          return data.sports[sport].samples || [];
+        }
+      } catch (e) {
+        logger.debug(`Cache parse failed for ${sport}`, e?.message);
+      }
+    }
+
+    // Fallback: fetch from aggregator in real-time
+    logger.info(`📡 Fetching ${sport} matches real-time from StatPal`);
+    return await sportsAggregator._getLiveFromStatPal(sport, 'v1');
+  } catch (e) {
+    logger.warn(`Failed to get ${sport} live matches`, e?.message);
+    return [];
+  }
+}
+
+/**
+ * Helper: Fetch upcoming fixtures for a sport from Redis cache (if available)
+ */
+async function getUpcomingFixturesBySport(sport, redis, sportsAggregator) {
+  try {
+    const cacheKey = 'betrix:prefetch:fixtures:latest';
+    const cached = await redis.get(cacheKey).catch(() => null);
+    if (cached) {
+      try {
+        const data = JSON.parse(cached);
+        // data.leagues[leagueId] has fixtures array
+        const allFixtures = Object.values(data.leagues || {})
+          .flatMap(l => (Array.isArray(l.fixtures) ? l.fixtures : []))
+          .filter(f => {
+            const fSport = f.sport || f.league?.type || 'soccer';
+            return fSport === sport;
+          });
+        if (allFixtures.length > 0) {
+          logger.info(`📦 Got cached ${sport} fixtures from prefetch`);
+          return allFixtures;
+        }
+      } catch (e) {
+        logger.debug(`Fixtures cache parse failed for ${sport}`, e?.message);
+      }
+    }
+
+    // Fallback: fetch real-time
+    logger.info(`📡 Fetching ${sport} fixtures real-time from StatPal`);
+    return await sportsAggregator._getFixturesFromStatPal(sport, 'v1');
+  } catch (e) {
+    logger.warn(`Failed to get ${sport} fixtures`, e?.message);
+    return [];
+  }
+}
+
+/**
+ * Helper: Fetch odds for a sport from Redis cache (if available)
+ */
+async function getOddsBySport(sport, redis, sportsAggregator) {
+  try {
+    const cacheKey = 'betrix:prefetch:odds:latest';
+    const cached = await redis.get(cacheKey).catch(() => null);
+    if (cached) {
+      try {
+        const data = JSON.parse(cached);
+        const allOdds = Object.values(data.leagues || {})
+          .flatMap(l => (Array.isArray(l.odds) ? l.odds : []))
+          .filter(o => {
+            const oSport = o.sport || o.league?.type || 'soccer';
+            return oSport === sport;
+          });
+        if (allOdds.length > 0) {
+          logger.info(`📦 Got cached ${sport} odds from prefetch`);
+          return allOdds;
+        }
+      } catch (e) {
+        logger.debug(`Odds cache parse failed for ${sport}`, e?.message);
+      }
+    }
+
+    // Fallback: fetch real-time
+    logger.info(`📡 Fetching ${sport} odds real-time from StatPal`);
+    return await sportsAggregator._getOddsFromStatPal(sport, 'v1');
+  } catch (e) {
+    logger.warn(`Failed to get ${sport} odds`, e?.message);
+    return [];
+  }
+}
+
+/**
  * Handle incoming Telegram message
  */
 export async function handleMessage(update, redis, services) {
@@ -1166,6 +1265,24 @@ async function handleLiveMenuCallback(chatId, userId, redis, services) {
         allLiveMatches = matchesPerLeague.flat();
       } catch (e) {
         logger.warn('Failed to fetch live matches across leagues', e);
+      }
+
+      // Also try to fetch from prefetch cache for all sports (not just soccer/football)
+      if (!allLiveMatches || allLiveMatches.length === 0) {
+        try {
+          logger.info('Trying prefetch cache for live matches across sports...');
+          const cachedData = await redis.get('betrix:prefetch:live:by-sport').catch(() => null);
+          if (cachedData) {
+            const parsed = JSON.parse(cachedData);
+            // Combine samples from all sports
+            allLiveMatches = Object.values(parsed.sports || {})
+              .flatMap(s => s.samples || [])
+              .filter(m => m && m.home && m.away);
+            logger.info(`Found ${allLiveMatches.length} matches from prefetch cache`);
+          }
+        } catch (e) {
+          logger.debug('Prefetch cache fetch failed', e?.message);
+        }
       }
     }
 

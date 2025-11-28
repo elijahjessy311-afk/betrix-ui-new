@@ -256,6 +256,11 @@ export class SportsAggregator {
           return this._formatMatches(matches, 'statpal');
         } else {
           logger.warn('⚠️  StatPal returned empty match list or unrecognized payload shape');
+          // Debug: log raw payload structure for inspection if DEBUG enabled
+          if (process.env.DEBUG_STATPAL_PAYLOADS === 'true') {
+            logger.info('🔍 Raw StatPal payload (first 1000 chars):', 
+              JSON.stringify(statpalData).substring(0, 1000));
+          }
           return [];
         }
       } catch (e) {
