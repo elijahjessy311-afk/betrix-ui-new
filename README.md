@@ -37,7 +37,7 @@
 
 ## 🏗️ Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Telegram Bot Users                        │
 └─────────────┬───────────────────────────┬───────────────────┘
@@ -214,6 +214,8 @@ $env:SPORTSMONKS_INSECURE='true'
 
 Do NOT enable this in production. After installing the proxy CA or allowlisting the host, unset the flag and re-run the service.
 
+Dev helper scripts (PowerShell and small Node tools) have been moved to `docs/dev-scripts/` to keep the primary `scripts/` area focused on production-ready helpers. Use those tools only on developer machines or after approval from your security team.
+
 Redis authentication
 - Provide `REDIS_URL` including credentials to allow the app to connect without `NOAUTH` warnings. Example:
 
@@ -276,7 +278,7 @@ export const CACHE_CONFIG = {
 
 ## 📊 Redis Data Structure
 
-```
+```text
 Keys Used:
 - telegram:updates          (List) - Pending Telegram updates
 - telegram:processing       (List) - Updates being processed
