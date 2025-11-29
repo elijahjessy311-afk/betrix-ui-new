@@ -150,7 +150,41 @@ export async function handleCallbackQuery(update, redis, services) {
   }
 }
 
+/**
+ * Unified command handler for /start, /menu, /help, /live
+ */
+export async function handleCommand(command, chatId, userId, redis, services) {
+  try {
+    logger.info(`Handling command: ${command}`);
+
+    if (command === '/start' || command === '/menu' || command === '/help' || command.startsWith('/live')) {
+      const games = await getLiveMatchesBySport('soccer', redis, services && services.sportsAggregator);
+      const payload = buildLiveMenuPayload(games, 'Soccer', 'FREE', 1, 6);
+      return {
+        chat_id: chatId,
+        text: payload.text,
+        reply_markup: payload.reply_markup,
+        parse_mode: 'Markdown'
+      };
+    }
+
+    return {
+      chat_id: chatId,
+      text: 'Send /live to view live soccer matches.',
+      parse_mode: 'Markdown'
+    };
+  } catch (e) {
+    logger.warn('handleCommand failed', e?.message || String(e));
+    return {
+      chat_id: chatId,
+      text: 'Error processing command.',
+      parse_mode: 'Markdown'
+    };
+  }
+}
+
 export default {
   handleMessage,
-  handleCallbackQuery
+  handleCallbackQuery,
+  handleCommand
 };
