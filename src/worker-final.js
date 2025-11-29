@@ -28,6 +28,7 @@ import OddsAnalyzer from "./services/odds-analyzer.js";
 import { MultiSportAnalyzer } from "./services/multi-sport-analyzer.js";
 import { startPrefetchScheduler } from "./tasks/prefetch-scheduler.js";
 import { APIBootstrap } from "./tasks/api-bootstrap.js";
+import { StatPalInit } from "./tasks/statpal-init.js";
 import CacheService from "./services/cache.js";
 import { AdvancedHandler } from "./advanced-handler.js";
 import { PremiumService } from "./services/premium.js";
@@ -221,6 +222,26 @@ const basicHandlers = new BotHandlers(telegram, userService, apiFootball, ai, re
   footballData: footballDataService,
   scrapers,
 });
+
+// ===== STATPAL INITIALIZATION: Test API key and prefetch ALL sports data =====
+let statpalInitSuccess = false;
+try {
+  const statpalInit = new StatPalInit(redis, CONFIG.STATPAL.KEY);
+  const statpalResult = await statpalInit.initialize();
+  statpalInitSuccess = statpalResult.success;
+  
+  if (statpalResult.success) {
+    logger.info('✅ StatPal Initialization successful', {
+      apiKey: statpalResult.results.apiKey,
+      totalDataPoints: statpalResult.results.totalDataPoints,
+      sportsWithData: Object.keys(statpalResult.results.sports).length
+    });
+  } else {
+    logger.error('❌ StatPal Initialization failed', statpalResult.results.errors);
+  }
+} catch (e) {
+  logger.error('StatPal initialization error', e?.message || String(e));
+}
 
 // ===== API BOOTSTRAP: Validate keys and immediately prefetch data =====
 let apiBootstrapSuccess = false;
