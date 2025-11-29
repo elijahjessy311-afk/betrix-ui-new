@@ -179,7 +179,7 @@ export class StatPalInit {
         }
         
         // Log the entire first match as JSON for inspection
-        logger.info(`    Full first match: ${JSON.stringify(firstMatch)}`);
+        logger.debug(`    Full first match: ${JSON.stringify(firstMatch)}`);
       }
 
       // Store in Redis cache
