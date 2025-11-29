@@ -272,6 +272,90 @@ export async function handleCallbackQuery(cq, redis, services) {
       };
     }
 
+    // ========================================================================
+    // FIXTURES / UPCOMING
+    // ========================================================================
+
+    if (data === 'menu_fixtures') {
+      // use sportsAggregator to fetch today's and tomorrow's fixtures
+      const today = new Date().toISOString().split('T')[0];
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      const fixtures = (services && services.sportsAggregator) ? await services.sportsAggregator.getFixtures(today, tomorrow) : [];
+
+      if (!fixtures || fixtures.length === 0) {
+        return {
+          method: 'editMessageText',
+          chat_id: chatId,
+          message_id: messageId,
+          text: `⚠️ No upcoming fixtures found for ${today} - ${tomorrow}`,
+          reply_markup: { inline_keyboard: [[{ text: '🏟 See Live Matches', callback_data: 'live_games' }, { text: '🔙 Back', callback_data: 'menu_main' }]] },
+          parse_mode: 'Markdown'
+        };
+      }
+
+      // Group by competition
+      const groups = {};
+      fixtures.forEach(f => {
+        const comp = f.competition || f.competition?.name || 'Other';
+        groups[comp] = groups[comp] || [];
+        groups[comp].push(f);
+      });
+
+      // Build simple text and keyboard where each fixture gets a button
+      let text = `🗓 *Upcoming Fixtures (${today} - ${tomorrow})*\n\n`;
+      const keyboard = [];
+      Object.keys(groups).slice(0, 10).forEach(comp => {
+        text += `🏆 *${comp}*\n`;
+        groups[comp].slice(0, 8).forEach(f => {
+          const kickoff = f.kickoff ? new Date(f.kickoff).toUTCString() : 'TBA';
+          text += `• ${f.home} vs ${f.away} — ${kickoff}\n`;
+          keyboard.push([{ text: `${f.home} vs ${f.away}`, callback_data: `fixture:${f.id}` }]);
+        });
+        text += `\n`;
+      });
+      keyboard.push([{ text: '🔙 Back', callback_data: 'menu_main' }]);
+
+      return {
+        method: 'editMessageText',
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        reply_markup: { inline_keyboard: keyboard },
+        parse_mode: 'Markdown'
+      };
+    }
+
+    if (data.startsWith('fixture:')) {
+      const fixtureId = data.split(':')[1];
+      const today = new Date().toISOString().split('T')[0];
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      const fixtures = (services && services.sportsAggregator) ? await services.sportsAggregator.getFixtures(today, tomorrow) : [];
+      const fixture = fixtures.find(f => String(f.id) === String(fixtureId));
+      if (!fixture) {
+        return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: '⚠️ Fixture not found', show_alert: false };
+      }
+      const text = `*Fixture: ${fixture.home} vs ${fixture.away}*\nKickoff: ${fixture.kickoff || 'TBA'}\nCompetition: ${fixture.competition || 'N/A'}\nVenue: ${fixture.venue || 'TBA'}\nStatus: ${fixture.status || 'SCHEDULED'}\nProvider: ${fixture.provider || 'Football-Data.org'}`;
+      return {
+        method: 'editMessageText',
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        reply_markup: { inline_keyboard: [[{ text: '🔎 Analyse Fixture', callback_data: `analyseFixture:${fixture.id}` }, { text: '🔙 Back', callback_data: 'menu_fixtures' }]] },
+        parse_mode: 'Markdown'
+      };
+    }
+
+    if (data.startsWith('analyseFixture:')) {
+      const fixtureId = data.split(':')[1];
+      // For now reuse fixture details and provide placeholder analysis
+      return {
+        method: 'answerCallbackQuery',
+        callback_query_id: cq.id,
+        text: `🔍 Analyse fixture ${fixtureId} — detailed analysis coming soon.`,
+        show_alert: false
+      };
+    }
+
     if (data.startsWith('news:')) {
       const category = data.split(':')[1];
       return {

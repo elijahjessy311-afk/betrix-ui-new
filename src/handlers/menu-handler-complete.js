@@ -166,15 +166,15 @@ Get live odds, predictions, and analysis.
   
   reply_markup: {
     inline_keyboard: [
-      // Row 1: Live & Odds
+      // Row 1: Live & Fixtures
       [
-        { text: '⚽ Live Games', callback_data: 'live_games' },
-        { text: '📊 Odds & Analysis', callback_data: 'odds_analysis' }
+        { text: '⚽ Live Matches', callback_data: 'live_games' },
+        { text: '📅 Upcoming Fixtures', callback_data: 'menu_fixtures' }
       ],
       // Row 2: Standings & News
       [
         { text: '🏆 Standings', callback_data: 'standings' },
-        { text: '📰 Latest News', callback_data: 'news' }
+        { text: '📊 Odds & Analysis', callback_data: 'odds_analysis' }
       ],
       // Row 3: Profile & Favorites
       [
