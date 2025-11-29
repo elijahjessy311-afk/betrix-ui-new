@@ -1090,6 +1090,23 @@ export class SportsAggregator {
    */
   async _getLiveFromStatPal(sport = 'soccer', version = 'v1') {
     try {
+      // Try to get cached data from StatPal initialization first
+      const cacheKey = `betrix:statpal:${sport}:livescores`;
+      let cachedData = null;
+      if (this.redis) {
+        try {
+          const cached = await this.redis.get(cacheKey);
+          if (cached) {
+            cachedData = JSON.parse(cached);
+            logger.debug(`📦 Got ${sport} live scores from cache (${cachedData.count} items)`);
+            return cachedData.data || [];
+          }
+        } catch (e) {
+          logger.debug(`Cache lookup for ${sport} failed`, e?.message);
+        }
+      }
+
+      // Fallback to real-time fetch
       const data = await this.statpal.getLiveScores(sport, version);
       if (!data) return [];
       return Array.isArray(data) ? data : (data.data || []);
