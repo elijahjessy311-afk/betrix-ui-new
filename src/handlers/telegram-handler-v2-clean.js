@@ -1,6 +1,7 @@
 /**
- * Telegram Handler v2 (full-featured)
+ * Telegram Handler v2 (full-featured + FIXED)
  * Complete menu system with BETRIX branding + SportMonks live data integration
+ * Uses HTML parse mode (not Markdown) to preserve button rendering
  */
 
 import { Logger } from '../utils/logger.js';
@@ -91,7 +92,7 @@ async function buildLiveSoccerMenu(redis, sportMonksAPI) {
     
     if (!matches || matches.length === 0) {
       return {
-        text: `${ICONS.brand} *BETRIX - Premium Sports Analytics*\n\n${ICONS.live} *Live Soccer Matches*\n\nNo live soccer matches right now.\n\nCheck back later for exciting matchups! ⚽`,
+        text: `${ICONS.brand} <b>BETRIX - Premium Sports Analytics</b>\n\n${ICONS.live} <b>Live Soccer Matches</b>\n\nNo live soccer matches right now.\n\nCheck back later for exciting matchups! ⚽`,
         reply_markup: {
           inline_keyboard: [
             [{ text: '🔄 Refresh', callback_data: 'menu_live_refresh:soccer:1' }],
@@ -107,10 +108,10 @@ async function buildLiveSoccerMenu(redis, sportMonksAPI) {
       const score = (m.homeScore != null && m.awayScore != null) 
         ? `${m.homeScore}-${m.awayScore}`
         : '---';
-      return `${i+1}. *${m.home}* *${score}* *${m.away}*\n   ⏱ ${m.status}`;
+      return `<b>${i+1}. ${m.home}</b> <b>${score}</b> <b>${m.away}</b>\n   ⏱ ${m.status}`;
     }).join('\n\n');
 
-    const text = `${ICONS.brand} *BETRIX - Premium Sports Analytics*\n\n${ICONS.live} *Live Soccer Matches* (${matches.length} total)\n\n${matchText}\n\n_Powered by SportMonks_`;
+    const text = `${ICONS.brand} <b>BETRIX - Premium Sports Analytics</b>\n\n${ICONS.live} <b>Live Soccer Matches</b> (${matches.length} total)\n\n${matchText}\n\n<i>Powered by SportMonks</i>`;
 
     // Build keyboard with match callbacks
     const keyboard = [];
@@ -135,7 +136,7 @@ async function buildLiveSoccerMenu(redis, sportMonksAPI) {
   } catch (e) {
     logger.warn('buildLiveSoccerMenu error', e?.message || String(e));
     return {
-      text: `${ICONS.brand} *BETRIX - Premium Sports Analytics*\n\n${ICONS.live} *Live Soccer*\n\nError loading matches. Try again.`,
+      text: `${ICONS.brand} <b>BETRIX - Premium Sports Analytics</b>\n\n${ICONS.live} <b>Live Soccer</b>\n\nError loading matches. Try again.`,
       reply_markup: {
         inline_keyboard: [
           [{ text: '🔄 Retry', callback_data: 'menu_live_refresh:soccer:1' }],
@@ -159,8 +160,7 @@ export async function handleMessage(update, redis, services) {
         method: 'sendMessage',
         chat_id: chatId,
         text: mainMenu.text,
-        reply_markup: mainMenu.reply_markup,
-        parse_mode: 'Markdown'
+        reply_markup: mainMenu.reply_markup
       };
     }
 
@@ -169,8 +169,7 @@ export async function handleMessage(update, redis, services) {
         method: 'sendMessage',
         chat_id: chatId,
         text: mainMenu.text,
-        reply_markup: mainMenu.reply_markup,
-        parse_mode: 'Markdown'
+        reply_markup: mainMenu.reply_markup
       };
     }
 
@@ -181,8 +180,7 @@ export async function handleMessage(update, redis, services) {
         method: 'sendMessage',
         chat_id: chatId,
         text: liveMenu.text,
-        reply_markup: liveMenu.reply_markup,
-        parse_mode: 'Markdown'
+        reply_markup: liveMenu.reply_markup
       };
     }
 
@@ -190,14 +188,8 @@ export async function handleMessage(update, redis, services) {
       return {
         method: 'sendMessage',
         chat_id: chatId,
-        text: `${ICONS.help} *BETRIX Help*\n\n` +
-          `${ICONS.menu} /menu - Main menu\n` +
-          `${ICONS.live} /live - Live matches\n` +
-          `${ICONS.standings} /standings - League standings\n` +
-          `${ICONS.odds} /odds - Betting odds\n` +
-          `${ICONS.tips} /tips - Expert tips\n` +
-          `${ICONS.pricing} /pricing - Subscription plans`,
-        parse_mode: 'Markdown'
+        text: `${ICONS.help} <b>BETRIX Help</b>\n\n${ICONS.menu} /menu - Main menu\n${ICONS.live} /live - Live matches\n${ICONS.standings} /standings - League standings\n${ICONS.odds} /odds - Betting odds\n${ICONS.tips} /tips - Expert tips\n${ICONS.pricing} /pricing - Subscription plans`,
+        parse_mode: 'HTML'
       };
     }
 
@@ -206,8 +198,7 @@ export async function handleMessage(update, redis, services) {
       method: 'sendMessage',
       chat_id: chatId,
       text: mainMenu.text,
-      reply_markup: mainMenu.reply_markup,
-      parse_mode: 'Markdown'
+      reply_markup: mainMenu.reply_markup
     };
   } catch (e) {
     logger.warn('handleMessage error', e?.message || String(e));
@@ -215,7 +206,7 @@ export async function handleMessage(update, redis, services) {
       method: 'sendMessage',
       chat_id: message.chat.id,
       text: '❌ Error processing message. Try /menu',
-      parse_mode: 'Markdown'
+      parse_mode: 'HTML'
     };
   }
 }
@@ -234,8 +225,7 @@ export async function handleCallbackQuery(update, redis, services) {
         chat_id: chatId,
         message_id: cq.message.message_id,
         text: mainMenu.text,
-        reply_markup: mainMenu.reply_markup,
-        parse_mode: 'Markdown'
+        reply_markup: mainMenu.reply_markup
       };
     }
 
@@ -248,8 +238,7 @@ export async function handleCallbackQuery(update, redis, services) {
         chat_id: chatId,
         message_id: cq.message.message_id,
         text: liveMenu.text,
-        reply_markup: liveMenu.reply_markup,
-        parse_mode: 'Markdown'
+        reply_markup: liveMenu.reply_markup
       };
     }
 
@@ -263,8 +252,7 @@ export async function handleCallbackQuery(update, redis, services) {
           chat_id: chatId,
           message_id: cq.message.message_id,
           text: liveMenu.text,
-          reply_markup: liveMenu.reply_markup,
-          parse_mode: 'Markdown'
+          reply_markup: liveMenu.reply_markup
         },
         {
           method: 'answerCallbackQuery',
@@ -295,7 +283,7 @@ export async function handleCallbackQuery(update, redis, services) {
         method: 'editMessageText',
         chat_id: chatId,
         message_id: cq.message.message_id,
-        text: `${ICONS.odds} *Betting Odds & Analysis*\n\nSelect a sport to view latest odds:`,
+        text: `${ICONS.odds} <b>Betting Odds & Analysis</b>\n\nSelect a sport to view latest odds:`,
         reply_markup: {
           inline_keyboard: [
             [{ text: '⚽ Soccer', callback_data: 'odds_soccer' }],
@@ -304,7 +292,7 @@ export async function handleCallbackQuery(update, redis, services) {
             [{ text: '← Back', callback_data: 'menu_main' }]
           ]
         },
-        parse_mode: 'Markdown'
+        parse_mode: 'HTML'
       };
     }
 
@@ -313,7 +301,7 @@ export async function handleCallbackQuery(update, redis, services) {
         method: 'editMessageText',
         chat_id: chatId,
         message_id: cq.message.message_id,
-        text: `${ICONS.standings} *League Standings*\n\nSelect a league to view standings:`,
+        text: `${ICONS.standings} <b>League Standings</b>\n\nSelect a league to view standings:`,
         reply_markup: {
           inline_keyboard: [
             [{ text: '⚽ Premier League', callback_data: 'standings_pl' }],
@@ -322,7 +310,7 @@ export async function handleCallbackQuery(update, redis, services) {
             [{ text: '← Back', callback_data: 'menu_main' }]
           ]
         },
-        parse_mode: 'Markdown'
+        parse_mode: 'HTML'
       };
     }
 
@@ -331,13 +319,13 @@ export async function handleCallbackQuery(update, redis, services) {
         method: 'editMessageText',
         chat_id: chatId,
         message_id: cq.message.message_id,
-        text: `${ICONS.news} *Latest Sports News*\n\nBreaking stories and updates from around the world.`,
+        text: `${ICONS.news} <b>Latest Sports News</b>\n\nBreaking stories and updates from around the world.`,
         reply_markup: {
           inline_keyboard: [
             [{ text: '← Back', callback_data: 'menu_main' }]
           ]
         },
-        parse_mode: 'Markdown'
+        parse_mode: 'HTML'
       };
     }
 
@@ -346,14 +334,14 @@ export async function handleCallbackQuery(update, redis, services) {
         method: 'editMessageText',
         chat_id: chatId,
         message_id: cq.message.message_id,
-        text: `${ICONS.vvip} *VVIP Subscription*\n\nUnlock premium features:\n\n✨ Advanced Match Analysis\n🎯 Expert Predictions\n💎 Priority Support\n🏆 Exclusive Tips\n\n_Starting from $9.99/month_`,
+        text: `${ICONS.vvip} <b>VVIP Subscription</b>\n\nUnlock premium features:\n\n✨ Advanced Match Analysis\n🎯 Expert Predictions\n💎 Priority Support\n🏆 Exclusive Tips\n\n<i>Starting from $9.99/month</i>`,
         reply_markup: {
           inline_keyboard: [
             [{ text: '💳 Subscribe Now', callback_data: 'vvip_subscribe' }],
             [{ text: '← Back', callback_data: 'menu_main' }]
           ]
         },
-        parse_mode: 'Markdown'
+        parse_mode: 'HTML'
       };
     }
 
@@ -362,13 +350,13 @@ export async function handleCallbackQuery(update, redis, services) {
         method: 'editMessageText',
         chat_id: chatId,
         message_id: cq.message.message_id,
-        text: `${ICONS.help} *Help & Support*\n\n${ICONS.live} /live - View live matches\n${ICONS.odds} /odds - Check betting odds\n${ICONS.standings} /standings - League tables\n${ICONS.tips} /tips - Expert predictions\n${ICONS.menu} /menu - Return to menu`,
+        text: `${ICONS.help} <b>Help & Support</b>\n\n${ICONS.live} /live - View live matches\n${ICONS.odds} /odds - Check betting odds\n${ICONS.standings} /standings - League tables\n${ICONS.tips} /tips - Expert predictions\n${ICONS.menu} /menu - Return to menu`,
         reply_markup: {
           inline_keyboard: [
             [{ text: '← Back', callback_data: 'menu_main' }]
           ]
         },
-        parse_mode: 'Markdown'
+        parse_mode: 'HTML'
       };
     }
 
@@ -377,13 +365,13 @@ export async function handleCallbackQuery(update, redis, services) {
         method: 'editMessageText',
         chat_id: chatId,
         message_id: cq.message.message_id,
-        text: `${ICONS.status} *My Profile*\n\n👤 User ID: ${chatId}\n💳 Plan: Free\n📊 Matches Viewed: 0`,
+        text: `${ICONS.status} <b>My Profile</b>\n\n👤 User ID: ${chatId}\n💳 Plan: Free\n📊 Matches Viewed: 0`,
         reply_markup: {
           inline_keyboard: [
             [{ text: '← Back', callback_data: 'menu_main' }]
           ]
         },
-        parse_mode: 'Markdown'
+        parse_mode: 'HTML'
       };
     }
 
@@ -416,8 +404,7 @@ export async function handleCommand(command, chatId, userId, redis, services) {
       return {
         chat_id: chatId,
         text: mainMenu.text,
-        reply_markup: mainMenu.reply_markup,
-        parse_mode: 'Markdown'
+        reply_markup: mainMenu.reply_markup
       };
     }
 
@@ -427,16 +414,15 @@ export async function handleCommand(command, chatId, userId, redis, services) {
       return {
         chat_id: chatId,
         text: liveMenu.text,
-        reply_markup: liveMenu.reply_markup,
-        parse_mode: 'Markdown'
+        reply_markup: liveMenu.reply_markup
       };
     }
 
     if (command === '/help') {
       return {
         chat_id: chatId,
-        text: `${ICONS.help} *BETRIX Help*\n\n${ICONS.menu} /menu - Main menu\n${ICONS.live} /live - Live matches\n${ICONS.standings} /standings - League standings\n${ICONS.odds} /odds - Betting odds\n${ICONS.tips} /tips - Expert tips\n${ICONS.pricing} /pricing - Subscription plans`,
-        parse_mode: 'Markdown'
+        text: `${ICONS.help} <b>BETRIX Help</b>\n\n${ICONS.menu} /menu - Main menu\n${ICONS.live} /live - Live matches\n${ICONS.standings} /standings - League standings\n${ICONS.odds} /odds - Betting odds\n${ICONS.tips} /tips - Expert tips\n${ICONS.pricing} /pricing - Subscription plans`,
+        parse_mode: 'HTML'
       };
     }
 
@@ -444,15 +430,14 @@ export async function handleCommand(command, chatId, userId, redis, services) {
     return {
       chat_id: chatId,
       text: mainMenu.text,
-      reply_markup: mainMenu.reply_markup,
-      parse_mode: 'Markdown'
+      reply_markup: mainMenu.reply_markup
     };
   } catch (e) {
     logger.warn('handleCommand failed', e?.message || String(e));
     return {
       chat_id: chatId,
       text: '❌ Error processing command. Try /menu',
-      parse_mode: 'Markdown'
+      parse_mode: 'HTML'
     };
   }
 }
