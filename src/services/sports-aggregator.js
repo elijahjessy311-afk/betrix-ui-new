@@ -58,28 +58,16 @@ export class SportsAggregator {
     this.scorebat = extras.scorebat || null;
     this.rss = extras.rss || null;
     this.openLiga = extras.openLiga || null;
-    this.statpal = (CONFIG.STATPAL && CONFIG.STATPAL.ENABLED) ? new StatPalService(redis) : null; // Initialize StatPal only when enabled
-    this.sportmonks = new SportMonksService(redis);
+    // Allowed providers can be passed in extras.allowedProviders as an array
+    // e.g. ['SPORTSMONKS','FOOTBALLDATA'] to force the aggregator to only
+    // consider those providers regardless of global CONFIG.
+    this.allowedProviders = Array.isArray(extras.allowedProviders)
+      ? extras.allowedProviders.map(p => String(p).toUpperCase())
+      : null;
+
+    // ONLY initialize SportMonks and Football-Data
+    this.sportmonks = (this._isAllowedSync('SPORTSMONKS') && CONFIG.SPORTSMONKS && CONFIG.SPORTSMONKS.KEY) ? new SportMonksService(redis) : null;
     this.providerHealth = new ProviderHealth(redis);
-    // API-Sports adaptive strategy (will pick the first working strategy)
-    this._apiSportsStrategy = null;
-    this._apiSportsStrategies = [
-      {
-        name: 'rapidapi',
-        base: 'https://api-football-v3.p.rapidapi.com',
-        headers: () => ({
-          'x-rapidapi-key': CONFIG.API_FOOTBALL.KEY,
-          'x-rapidapi-host': 'api-football-v3.p.rapidapi.com'
-        })
-      },
-      {
-        name: 'apisports-direct',
-        base: 'https://v3.football.api-sports.io',
-        headers: () => ({
-          'x-apisports-key': CONFIG.API_FOOTBALL.KEY
-        })
-      }
-    ];
   }
 
   async _recordProviderHealth(name, ok, message = '') {
@@ -100,7 +88,14 @@ export class SportsAggregator {
   // Check if a provider is enabled: checks CONFIG.PROVIDERS then optional Redis override
   async _isProviderEnabled(name) {
     try {
-      const cfg = (CONFIG.PROVIDERS && CONFIG.PROVIDERS[name]) || null;
+      // Accept case-insensitive provider names and normalize to upper-case for CONFIG lookup
+      const normName = String(name || '').toUpperCase();
+      // If allowedProviders is set, only providers listed there are considered enabled
+      if (Array.isArray(this.allowedProviders) && this.allowedProviders.length > 0) {
+        if (!this.allowedProviders.includes(normName)) return false;
+      }
+
+      const cfg = (CONFIG.PROVIDERS && CONFIG.PROVIDERS[normName]) || null;
       let enabled = cfg ? (cfg.enabled !== false) : true;
       if (this.redis) {
         const key = `betrix:provider:enabled:${name.toLowerCase()}`;
@@ -112,6 +107,12 @@ export class SportsAggregator {
     } catch (e) {
       return true;
     }
+  }
+
+  // Synchronous check used during construction to avoid async calls
+  _isAllowedSync(name) {
+    if (!this.allowedProviders || !Array.isArray(this.allowedProviders)) return true;
+    return this.allowedProviders.includes(String(name || '').toUpperCase());
   }
 
   /**
@@ -194,165 +195,43 @@ export class SportsAggregator {
         }
       }
 
-      // Determine sport (default to football). Prefer SportMonks for football live data.
-      const sport = (options && options.sport) ? options.sport : 'football';
-
-      if (sport === 'football' && CONFIG.SPORTSMONKS && CONFIG.SPORTSMONKS.KEY) {
+      // ONLY fetch from SportMonks and Football-Data
+      // Try SportMonks first (preferred for live data)
+      if (CONFIG.SPORTSMONKS && CONFIG.SPORTSMONKS.KEY) {
         try {
-          logger.debug('📡 Fetching live matches from SportMonks (preferred for football)');
+          logger.debug('📡 Fetching live matches from SportMonks');
           const smMatches = await this.sportmonks.getLivescores(leagueId);
           if (smMatches && smMatches.length > 0) {
-            logger.info(`✅ SportMonks: Found ${smMatches.length} live matches (preferred)`);
+            logger.info(`✅ SportMonks: Found ${smMatches.length} live matches`);
             this._setCached(cacheKey, smMatches);
             await this._recordProviderHealth('sportsmonks', true, `Found ${smMatches.length} live matches`);
             return this._formatMatches(smMatches, 'sportsmonks');
           }
         } catch (e) {
-          logger.warn('SportMonks preferred fetch failed', e?.message || String(e));
+          logger.warn('SportMonks live fetch failed', e?.message || String(e));
           try { await this._recordProviderHealth('sportsmonks', false, e?.message || String(e)); } catch(_) {}
         }
       }
 
-      if (!CONFIG.STATPAL.KEY) {
-        logger.error('❌ StatPal API Key (STATPAL_API env var) not configured');
-        return [];
+      // Fallback to Football-Data if SportMonks unavailable
+      if (CONFIG.FOOTBALLDATA && CONFIG.FOOTBALLDATA.KEY) {
+        try {
+          logger.debug('📡 Fetching live matches from Football-Data');
+          const fdMatches = await this._getLiveFromFootballData();
+          if (fdMatches && fdMatches.length > 0) {
+            logger.info(`✅ Football-Data: Found ${fdMatches.length} live matches`);
+            this._setCached(cacheKey, fdMatches);
+            await this._recordProviderHealth('footballdata', true, `Found ${fdMatches.length} live matches`);
+            return this._formatMatches(fdMatches, 'footballdata');
+          }
+        } catch (e) {
+          logger.warn('Football-Data live fetch failed', e?.message || String(e));
+          try { await this._recordProviderHealth('footballdata', false, e?.message || String(e)); } catch(_) {}
+        }
       }
 
-      try {
-        logger.debug(`📡 Fetching live matches from StatPal for league ${leagueId}`);
-        const statpalData = await this.statpal.getLiveScores('soccer', 'v1');
-        
-        if (!statpalData) {
-          logger.warn('⚠️  StatPal returned null data');
-          return [];
-        }
-        
-        // Normalize StatPal response shapes. StatPal responses vary between
-        // - an array of matches
-        // - { data: [...] }
-        // - { data: { matches: [...] } }
-        // - { results: [...] } or { matches: [...] }
-        // - nested objects where the first encountered array is the payload
-        const extractMatches = (obj) => {
-          if (!obj) return [];
-          if (Array.isArray(obj)) return obj;
-          // Common top-level array holders
-          if (Array.isArray(obj.data)) return obj.data;
-          if (Array.isArray(obj.matches)) return obj.matches;
-          if (Array.isArray(obj.results)) return obj.results;
-          // data as object containing arrays
-          if (obj.data && typeof obj.data === 'object') {
-            if (Array.isArray(obj.data.matches)) return obj.data.matches;
-            if (Array.isArray(obj.data.results)) return obj.data.results;
-            // find first array value inside data
-            for (const v of Object.values(obj.data)) {
-              if (Array.isArray(v)) return v;
-            }
-          }
-          // fallback: check any top-level property that is an array
-          for (const v of Object.values(obj)) {
-            if (Array.isArray(v)) return v;
-          }
-          // maybe the payload is an object keyed by league ids -> arrays
-          const arrays = [];
-          for (const v of Object.values(obj)) {
-            if (v && typeof v === 'object') {
-              for (const sub of Object.values(v)) {
-                if (Array.isArray(sub)) arrays.push(...sub);
-              }
-            }
-          }
-          if (arrays.length > 0) return arrays;
-          return [];
-        };
-
-        let matches = extractMatches(statpalData);
-
-        // StatPal sometimes returns an array of competitions where each element
-        // contains a `match` array with actual match objects. Detect and flatten
-        // that shape so downstream normalization sees raw match objects.
-        if (Array.isArray(matches) && matches.length > 0) {
-          const first = matches[0];
-          // If first item looks like a competition wrapper with a `match` array
-          if (first && typeof first === 'object' && Array.isArray(first.match)) {
-            matches = matches.flatMap(c => Array.isArray(c.match) ? c.match : []);
-          }
-          // Some payloads have the matches under a nested array name like `matches` or `data.match`
-          if (matches.length === 0 && Array.isArray(statpalData)) {
-            // try to find any nested arrays named 'match' or 'matches' and flatten
-            const flattened = [];
-            for (const item of statpalData) {
-              if (item && typeof item === 'object') {
-                if (Array.isArray(item.match)) flattened.push(...item.match);
-                else if (Array.isArray(item.matches)) flattened.push(...item.matches);
-                else if (item.data && Array.isArray(item.data.match)) flattened.push(...item.data.match);
-              }
-            }
-            if (flattened.length > 0) matches = flattened;
-          }
-        }
-        
-        if (matches.length > 0) {
-          // Validate that matches have team data
-          const validMatches = matches.filter(m => {
-            // Check if match has home/away or similar fields
-            const hasTeams = m && (
-              (m.home && m.away) ||
-              (m.teams && ((m.teams.home || m.teams[0]) && (m.teams.away || m.teams[1]))) ||
-              (m.homeTeam && m.awayTeam) ||
-              (m.main_team && m.visitor_team) ||
-              (m.participants && m.participants.length >= 2) ||
-              (m.title && m.title.includes(' vs '))
-            );
-            return hasTeams;
-          });
-          
-          if (validMatches.length === 0) {
-            logger.warn('⚠️  StatPal returned matches but none have valid team data. Sample:', 
-              matches.slice(0, 1).map(m => Object.keys(m)));
-            // Try formatting anyway - it'll use fallbacks
-            const formatted = this._formatMatches(matches, 'statpal');
-            this._setCached(cacheKey, formatted);
-            return formatted;
-          }
-          
-          logger.info(`✅ StatPal: Found ${matches.length} live matches (soccer)`);
-          this._setCached(cacheKey, matches);
-          await this._recordProviderHealth('statpal', true, `Found ${matches.length} live matches`);
-          return this._formatMatches(matches, 'statpal');
-        } else {
-          logger.warn('⚠️  StatPal returned empty match list or unrecognized payload shape');
-          // Debug: log raw payload structure for inspection if DEBUG enabled
-          if (process.env.DEBUG_STATPAL_PAYLOADS === 'true') {
-            logger.info('🔍 Raw StatPal payload (first 1000 chars):', 
-              JSON.stringify(statpalData).substring(0, 1000));
-          }
-          // Fallback: try SportMonks if configured and enabled
-          if (CONFIG.SPORTSMONKS && CONFIG.SPORTSMONKS.KEY) {
-            try {
-              logger.debug('📡 Attempting SportMonks live fallback');
-              const smMatches = await this.sportmonks.getLivescores(leagueId);
-              if (smMatches && smMatches.length > 0) {
-                logger.info(`✅ SportMonks: Found ${smMatches.length} live matches (fallback)`);
-                this._setCached(cacheKey, smMatches);
-                await this._recordProviderHealth('sportsmonks', true, `Found ${smMatches.length} live matches`);
-                return this._formatMatches(smMatches, 'sportsmonks');
-              }
-            } catch (e) {
-              logger.warn('SportMonks live fallback failed', e?.message || String(e));
-              try { await this._recordProviderHealth('sportsmonks', false, e?.message || String(e)); } catch(_) {}
-            }
-          }
-          return [];
-        }
-      } catch (e) {
-        logger.error(`❌ StatPal live matches error: ${e.message}`);
-        await this._recordProviderHealth('statpal', false, e.message);
-        try { 
-          await this.providerHealth.markFailure('statpal-live', e.statusCode || e.status || 500, e.message); 
-        } catch(e2) {}
-        return [];
-      }
+      logger.warn('⚠️  No live matches available from SportMonks or Football-Data');
+      return [];
     } catch (err) {
       logger.error('getLiveMatches failed:', err.message);
       return [];
@@ -480,6 +359,11 @@ export class SportsAggregator {
    * caches the successful strategy for subsequent calls.
    */
   async _fetchApiSports(path, options = {}, retries = 2) {
+    // If API-Football is not allowed by the aggregator's runtime whitelist, abort
+    if (!this._isAllowedSync('API_FOOTBALL')) {
+      throw new Error('API-Football is not allowed by the SportsAggregator configuration');
+    }
+
     // Check if API key is configured
     if (!CONFIG.API_FOOTBALL.KEY) {
       throw new Error('API_FOOTBALL_KEY or API_SPORTS_KEY environment variable not set');

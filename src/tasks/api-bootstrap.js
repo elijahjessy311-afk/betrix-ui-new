@@ -27,19 +27,7 @@ export class APIBootstrap {
       providers: {}
     };
 
-    // Check API-Football / API-Sports (RapidAPI)
-    if (CONFIG.API_FOOTBALL && CONFIG.API_FOOTBALL.KEY) {
-      status.providers.API_FOOTBALL = {
-        enabled: true,
-        key: `${CONFIG.API_FOOTBALL.KEY.substring(0, 8)}...${CONFIG.API_FOOTBALL.KEY.substring(CONFIG.API_FOOTBALL.KEY.length - 4)}`,
-        base: CONFIG.API_FOOTBALL.BASE || 'https://api-football-v3.p.rapidapi.com'
-      };
-      this.providers.apiFootball = true;
-      logger.info('✅ API-Football configured', status.providers.API_FOOTBALL);
-    } else {
-      status.providers.API_FOOTBALL = { enabled: false, reason: 'API_FOOTBALL_KEY or API_SPORTS_KEY not set' };
-      logger.warn('⚠️  API-Football NOT configured - no live/upcoming fixtures from API-Sports');
-    }
+    logger.info('🚀 Initializing with SportMonks and Football-Data only');
 
     // Check Football-Data.org
     if (CONFIG.FOOTBALLDATA && CONFIG.FOOTBALLDATA.KEY) {
@@ -55,46 +43,18 @@ export class APIBootstrap {
       logger.warn('⚠️  Football-Data.org NOT configured');
     }
 
-    // Check SportsData.io
-    if (CONFIG.SPORTSDATA && CONFIG.SPORTSDATA.KEY) {
-      status.providers.SPORTSDATA = {
-        enabled: true,
-        key: `${CONFIG.SPORTSDATA.KEY.substring(0, 8)}...${CONFIG.SPORTSDATA.KEY.substring(CONFIG.SPORTSDATA.KEY.length - 4)}`,
-        base: CONFIG.SPORTSDATA.BASE || 'https://api.sportsdata.io'
-      };
-      this.providers.sportsData = true;
-      logger.info('✅ SportsData.io configured', status.providers.SPORTSDATA);
-    } else {
-      status.providers.SPORTSDATA = { enabled: false, reason: 'SPORTSDATA_API_KEY not set' };
-      logger.warn('⚠️  SportsData.io NOT configured');
-    }
-
-    // Check SofaScore
-    if (CONFIG.SOFASCORE && CONFIG.SOFASCORE.KEY) {
-      status.providers.SOFASCORE = {
-        enabled: true,
-        key: `${CONFIG.SOFASCORE.KEY.substring(0, 8)}...${CONFIG.SOFASCORE.KEY.substring(CONFIG.SOFASCORE.KEY.length - 4)}`,
-        base: CONFIG.SOFASCORE.BASE || 'https://sofascore.p.rapidapi.com'
-      };
-      this.providers.sofaScore = true;
-      logger.info('✅ SofaScore configured', status.providers.SOFASCORE);
-    } else {
-      status.providers.SOFASCORE = { enabled: false, reason: 'SOFASCORE_API_KEY not set' };
-      logger.warn('⚠️  SofaScore NOT configured');
-    }
-
-    // Check SportsMonks
+    // Check SportMonks
     if (CONFIG.SPORTSMONKS && CONFIG.SPORTSMONKS.KEY) {
       status.providers.SPORTSMONKS = {
         enabled: true,
         key: `${CONFIG.SPORTSMONKS.KEY.substring(0, 8)}...${CONFIG.SPORTSMONKS.KEY.substring(CONFIG.SPORTSMONKS.KEY.length - 4)}`,
         base: CONFIG.SPORTSMONKS.BASE || 'https://api.sportsmonks.com/v3'
       };
-      this.providers.sportsMonks = true;
-      logger.info('✅ SportsMonks configured', status.providers.SPORTSMONKS);
+      this.providers.sportMonks = true;
+      logger.info('✅ SportMonks configured', status.providers.SPORTSMONKS);
     } else {
       status.providers.SPORTSMONKS = { enabled: false, reason: 'SPORTSMONKS_API_KEY not set' };
-      logger.warn('⚠️  SportsMonks NOT configured');
+      logger.warn('⚠️  SportMonks NOT configured');
     }
 
     // Summary
@@ -118,190 +78,85 @@ export class APIBootstrap {
   }
 
   /**
-   * Immediately prefetch live matches from StatPal for multiple sports
+   * Immediately prefetch live matches from SportMonks and Football-Data
    */
   async prefetchLiveMatches() {
-    logger.info('🔄 Starting immediate live matches prefetch from StatPal...');
+    logger.info('🔄 Prefetching live matches from SportMonks/Football-Data...');
     
-    // Supported sports in StatPal
-    const sports = [
-      'soccer',      // Football/Soccer
-      'nfl',         // American Football
-      'nba',         // Basketball
-      'nhl',         // Ice Hockey
-      'mlb',         // Baseball
-      'cricket',     // Cricket
-      'tennis',      // Tennis
-      'rugby',       // Rugby
-      'volleyball'   // Volleyball
-    ];
-
-    const leagueIds = [39, 140, 135, 61, 78, 2]; // Premier League, La Liga, Serie A, Ligue 1, Bundesliga, Champions League (for soccer)
     const results = {
       timestamp: new Date().toISOString(),
-      sports: {},
       totalMatches: 0
     };
 
-    // Prefetch each sport
-    for (const sport of sports) {
-      const sportResults = {
-        count: 0,
-        samples: []
-      };
-
-      try {
-        const matches = await this.sportsAggregator._getLiveFromStatPal(sport, 'v1');
-        if (matches && Array.isArray(matches) && matches.length > 0) {
-          sportResults.count = matches.length;
-          sportResults.samples = matches.slice(0, 2);
-          results.totalMatches += matches.length;
-          logger.info(`✅ ${sport.toUpperCase()}: Found ${matches.length} live matches`, {
-            samples: matches.slice(0, 2).map(m => ({ home: m.home, away: m.away, provider: m.provider }))
-          });
-        }
-      } catch (e) {
-        logger.debug(`⚠️  ${sport.toUpperCase()}: Failed to fetch live matches`, e?.message);
-        sportResults.error = e.message;
-      }
-
-      results.sports[sport] = sportResults;
-    }
-
-    // Store results in Redis for UI access — merge into existing prefetch to avoid overwriting other sports
     try {
-      const key = 'betrix:prefetch:live:by-sport';
-      const existingRaw = await this.redis.get(key).catch(() => null);
-      if (existingRaw) {
-        try {
-          const existing = JSON.parse(existingRaw);
-          // ensure structure
-          existing.sports = existing.sports || {};
-          // merge per-sport only when we have fresh samples
-          for (const [s, val] of Object.entries(results.sports || {})) {
-            if (val && Array.isArray(val.samples) && val.samples.length > 0) {
-              existing.sports[s] = val;
-              existing.timestamp = results.timestamp;
-            }
-          }
-          // write merged object
-          await this.redis.set(key, JSON.stringify(existing), 'EX', 300);
-        } catch (e) {
-          // parsing failed — fallback to writing new results
-          await this.redis.set(key, JSON.stringify(results), 'EX', 300);
-        }
+      const matches = await this.sportsAggregator.getLiveMatches('football');
+      if (matches && Array.isArray(matches) && matches.length > 0) {
+        results.totalMatches = matches.length;
+        logger.info(`✅ Found ${matches.length} live matches from SportMonks/Football-Data`);
       } else {
-        await this.redis.set(key, JSON.stringify(results), 'EX', 300);
+        logger.info('ℹ️  No live matches available at this time');
       }
     } catch (e) {
-      logger.warn('Failed to store live matches prefetch results', e?.message);
+      logger.warn('⚠️  Failed to prefetch live matches', e?.message);
+      results.error = e.message;
     }
 
     return results;
   }
 
   /**
-   * Immediately prefetch upcoming fixtures from StatPal for common leagues
+   * Immediately prefetch upcoming fixtures from SportMonks and Football-Data
    */
   async prefetchUpcomingFixtures() {
-    logger.info('🔄 Starting immediate upcoming fixtures prefetch from StatPal...');
+    logger.info('🔄 Prefetching upcoming fixtures from SportMonks/Football-Data...');
     
-    const leagueIds = [39, 140, 135, 61, 78, 2]; // Premier League, La Liga, Serie A, Ligue 1, Bundesliga, Champions League
     const results = {
       timestamp: new Date().toISOString(),
-      leagues: {}
+      totalFixtures: 0
     };
 
-    for (const leagueId of leagueIds) {
-      try {
-        // Call StatPal fixtures endpoint via aggregator
-        const fixtures = await this.sportsAggregator._getFixturesFromStatPal('soccer', 'v1');
-        
-        // Filter to only upcoming fixtures for this league (if fixtures have league info)
-        let filtered = fixtures;
-        if (fixtures && Array.isArray(fixtures)) {
-          filtered = fixtures.filter(f => {
-            const fLeagueId = f.league?.id || f.competition?.id;
-            return !fLeagueId || fLeagueId === leagueId || fLeagueId === String(leagueId);
-          });
-        }
-
-        results.leagues[leagueId] = {
-          count: filtered ? filtered.length : 0,
-          fixtures: filtered ? filtered.slice(0, 2) : []
-        };
-        
-        if (filtered && filtered.length > 0) {
-          logger.info(`✅ League ${leagueId}: Found ${filtered.length} upcoming fixtures`, {
-            samples: filtered.slice(0, 2).map(f => ({ home: f.home, away: f.away, status: f.status }))
-          });
-        }
-      } catch (e) {
-        results.leagues[leagueId] = { error: e.message, count: 0 };
-        logger.debug(`⚠️  League ${leagueId}: Failed to fetch upcoming fixtures`, e?.message);
-      }
-    }
-
-    // Store results in Redis for UI access
     try {
-      await this.redis.set('betrix:prefetch:fixtures:latest', JSON.stringify(results), 'EX', 600);
+      const today = new Date().toISOString().split('T')[0];
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      const fixtures = await this.sportsAggregator.getFixtures(today, tomorrow);
+      
+      if (fixtures && Array.isArray(fixtures) && fixtures.length > 0) {
+        results.totalFixtures = fixtures.length;
+        logger.info(`✅ Found ${fixtures.length} upcoming fixtures from SportMonks/Football-Data`);
+      } else {
+        logger.info('ℹ️  No upcoming fixtures available');
+      }
     } catch (e) {
-      logger.warn('Failed to store upcoming fixtures prefetch results', e?.message);
+      logger.warn('⚠️  Failed to prefetch upcoming fixtures', e?.message);
+      results.error = e.message;
     }
 
     return results;
   }
 
   /**
-   * Immediately prefetch odds from StatPal for common leagues
+   * Immediately prefetch odds from SportMonks and Football-Data
    */
   async prefetchOdds() {
-    logger.info('🔄 Starting immediate odds prefetch from StatPal...');
+    logger.info('🔄 Prefetching odds from SportMonks/Football-Data...');
     
-    const leagueIds = [39, 140, 135, 61, 78, 2]; // Premier League, La Liga, Serie A, Ligue 1, Bundesliga, Champions League
     const results = {
       timestamp: new Date().toISOString(),
-      leagues: {}
+      totalOdds: 0
     };
 
-    for (const leagueId of leagueIds) {
-      try {
-        // Call StatPal odds endpoint via aggregator
-        const odds = await this.sportsAggregator._getOddsFromStatPal('soccer', 'v1');
-        
-        // Filter to only odds for this league (if odds have league/fixture info)
-        let filtered = odds;
-        if (odds && Array.isArray(odds)) {
-          filtered = odds.filter(o => {
-            const oLeagueId = o.league?.id || o.fixture?.league?.id || o.competition?.id;
-            return !oLeagueId || oLeagueId === leagueId || oLeagueId === String(leagueId);
-          });
-        }
-
-        results.leagues[leagueId] = {
-          count: filtered ? filtered.length : 0,
-          odds: filtered ? filtered.slice(0, 2) : []
-        };
-        
-        if (filtered && filtered.length > 0) {
-          logger.info(`✅ League ${leagueId}: Found ${filtered.length} odds entries`, {
-            samples: filtered.slice(0, 2).map(o => ({ 
-              fixtureId: o.fixtureId, 
-              bookmakers: o.bookmakers ? o.bookmakers.length : 0 
-            }))
-          });
-        }
-      } catch (e) {
-        results.leagues[leagueId] = { error: e.message, count: 0 };
-        logger.debug(`⚠️  League ${leagueId}: Failed to fetch odds`, e?.message);
-      }
-    }
-
-    // Store results in Redis for UI access
     try {
-      await this.redis.set('betrix:prefetch:odds:latest', JSON.stringify(results), 'EX', 600);
+      const odds = await this.sportsAggregator.getOdds('football');
+      
+      if (odds && Array.isArray(odds) && odds.length > 0) {
+        results.totalOdds = odds.length;
+        logger.info(`✅ Found ${odds.length} odds entries from SportMonks/Football-Data`);
+      } else {
+        logger.info('ℹ️  No odds available');
+      }
     } catch (e) {
-      logger.warn('Failed to store odds prefetch results', e?.message);
+      logger.warn('⚠️  Failed to prefetch odds', e?.message);
+      results.error = e.message;
     }
 
     return results;
@@ -322,45 +177,30 @@ export class APIBootstrap {
       // Step 1: Validate all keys
       const keyStatus = this.validateAPIKeys();
       
-      if (!keyStatus.summary.readyForLiveData) {
-        logger.error('❌ No API providers configured. Add at least one API key to use live data features.');
-        return { success: false, reason: 'No API keys configured', status: keyStatus };
-      }
+      logger.info(`✅ Bootstrap found configured providers`);
 
-      logger.info(`✅ Bootstrap found ${keyStatus.summary.enabledProviders} configured providers`);
-
-      // Step 2: Immediately prefetch data (only for providers enabled)
+      // Step 2: Immediately prefetch data
       logger.info('⏱️  Starting immediate data prefetch (this may take 10-30 seconds)...');
 
-      let liveMatches = { sports: {} };
-      let upcomingFixtures = { sports: {} };
-      let odds = { sports: {} };
-
-      // Only prefetch StatPal endpoints when STATPAL is enabled
-      if (CONFIG.STATPAL && CONFIG.STATPAL.ENABLED) {
-        liveMatches = await this.prefetchLiveMatches();
-        upcomingFixtures = await this.prefetchUpcomingFixtures();
-        odds = await this.prefetchOdds();
-      } else {
-        logger.info('ℹ️ Skipping StatPal prefetch (STATPAL disabled in config)');
-      }
-
-      const summaryData = {
-        liveMatches: Object.values(liveMatches.sports || {}).reduce((sum, l) => sum + (l.count || 0), 0),
-        upcomingFixtures: Object.values(upcomingFixtures.sports || {}).reduce((sum, l) => sum + (l.count || 0), 0),
-        oddsAvailable: Object.values(odds.sports || {}).reduce((sum, l) => sum + (l.count || 0), 0)
-      };
+      const liveMatches = await this.prefetchLiveMatches();
+      const upcomingFixtures = await this.prefetchUpcomingFixtures();
+      const odds = await this.prefetchOdds();
 
       logger.info('✅ API Bootstrap Complete!', {
-        providersConfigured: keyStatus.summary.enabledProviders,
-        ...summaryData
+        liveMatches: liveMatches.totalMatches || 0,
+        upcomingFixtures: upcomingFixtures.totalFixtures || 0,
+        oddsAvailable: odds.totalOdds || 0
       });
 
       this.isInitialized = true;
       return {
         success: true,
         providers: keyStatus,
-        data: summaryData
+        data: {
+          liveMatches: liveMatches.totalMatches || 0,
+          upcomingFixtures: upcomingFixtures.totalFixtures || 0,
+          oddsAvailable: odds.totalOdds || 0
+        }
       };
 
     } catch (e) {
@@ -377,11 +217,11 @@ export class APIBootstrap {
 
     setInterval(async () => {
       try {
-        const liveCount = (await this.prefetchLiveMatches()).total || 0;
-        const upcomingCount = (await this.prefetchUpcomingFixtures()).total || 0;
+        const liveMatches = await this.prefetchLiveMatches();
+        const upcomingFixtures = await this.prefetchUpcomingFixtures();
         
-        if (liveCount > 0 || upcomingCount > 0) {
-          logger.info(`🔄 Prefetch cycle: ${liveCount} live, ${upcomingCount} upcoming`);
+        if ((liveMatches.totalMatches || 0) > 0 || (upcomingFixtures.totalFixtures || 0) > 0) {
+          logger.info(`🔄 Prefetch cycle: ${liveMatches.totalMatches || 0} live, ${upcomingFixtures.totalFixtures || 0} upcoming`);
         }
       } catch (e) {
         logger.warn('Continuous prefetch cycle failed', e?.message);
