@@ -1159,7 +1159,31 @@ export class SportsAggregator {
       // Fallback to real-time fetch
       const data = await this.statpal.getLiveScores(sport, version);
       if (!data) return [];
-      return Array.isArray(data) ? data : (data.data || []);
+
+      // Normalize and flatten common StatPal shapes so callers always get
+      // an array of match objects with `home`/`away` fields.
+      let items = Array.isArray(data) ? data : (data.data || []);
+
+      // If items look like competition wrappers with a `match` array, flatten
+      if (Array.isArray(items) && items.length > 0 && items[0] && typeof items[0] === 'object' && Array.isArray(items[0].match)) {
+        items = items.flatMap(c => Array.isArray(c.match) ? c.match : []);
+      }
+
+      // If still wrapped (e.g., data -> competitions -> match), try deeper extraction
+      if ((!Array.isArray(items) || items.length === 0) && data && typeof data === 'object') {
+        // check data.matches or nested arrays
+        if (Array.isArray(data.matches)) items = data.matches;
+        else if (data.data && Array.isArray(data.data.matches)) items = data.data.matches;
+      }
+
+      // Finally, attempt to format fixtures into canonical match shape
+      try {
+        const formatted = this._formatStatPalFixtures(items, sport);
+        return formatted;
+      } catch (e) {
+        // fallback: return raw items
+        return items;
+      }
     } catch (e) {
       logger.error(`StatPal ${sport} live error:`, e.message);
       return [];
