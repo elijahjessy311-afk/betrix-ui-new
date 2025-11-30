@@ -179,10 +179,18 @@ export class SportsAggregator {
           logger.debug('📡 Fetching live matches from SportMonks');
           const smMatches = await this.sportmonks.getLivescores(leagueId);
           if (smMatches && smMatches.length > 0) {
-            logger.info(`✅ SportMonks: Found ${smMatches.length} live matches`);
-            this._setCached(cacheKey, smMatches);
-            await this._recordProviderHealth('sportsmonks', true, `Found ${smMatches.length} live matches`);
-            return this._formatMatches(smMatches, 'sportsmonks');
+            logger.info(`✅ SportMonks: Found ${smMatches.length} live matches (raw)`);
+            const formatted = this._formatMatches(smMatches, 'sportsmonks');
+            const liveOnly = formatted.filter(m => String(m.status).toUpperCase() === 'LIVE');
+            logger.info(`🔍 SportMonks formatted:${formatted.length} live:${liveOnly.length}`);
+            if (liveOnly.length > 0) {
+              this._setCached(cacheKey, liveOnly);
+              await this._recordProviderHealth('sportsmonks', true, `Found ${liveOnly.length} live matches`);
+              return liveOnly;
+            }
+            // Keep formatted results in cache for diagnostics if none marked LIVE
+            this._setCached(cacheKey, formatted);
+            await this._recordProviderHealth('sportsmonks', false, `No matches marked LIVE (raw:${smMatches.length})`);
           }
         } catch (e) {
           logger.warn('SportMonks live fetch failed', e?.message || String(e));
@@ -242,12 +250,19 @@ export class SportsAggregator {
             // Store raw data
             await this.dataCache.storeLiveMatches('sportsmonks', smMatches);
             const formatted = this._formatMatches(smMatches, 'sportsmonks');
-            // Filter to only LIVE status matches
-            const liveOnly = formatted.filter(m => m.status === 'LIVE');
-            allLive.push(...liveOnly);
+            // Filter to only LIVE status matches (allow multiple possible live state codes)
+            const liveOnly = formatted.filter(m => String(m.status).toUpperCase() === 'LIVE');
+            logger.info(`🔍 SportMonks raw:${smMatches.length} formatted:${formatted.length} live:${liveOnly.length}`);
+            // Cache and return only the live matches for the global live feed
+            if (liveOnly.length > 0) {
+              await this.dataCache.storeLiveMatches('sportsmonks', smMatches);
+              this._setCached(cacheKey, liveOnly);
+              await this._recordProviderHealth('sportsmonks', true, `Found ${liveOnly.length} live matches globally`);
+              return liveOnly;
+            }
+            // If there were formatted matches but none marked LIVE, keep the formatted cache for diagnostics
             this._setCached(cacheKey, formatted);
-            await this._recordProviderHealth('sportsmonks', true, `Found ${liveOnly.length} live matches globally`);
-            return formatted;
+            await this._recordProviderHealth('sportsmonks', false, `No matches marked LIVE (raw:${smMatches.length})`);
           }
         } catch (e) {
           logger.warn('SportMonks global live fetch failed', e?.message || String(e));
@@ -1101,12 +1116,21 @@ export class SportsAggregator {
           awayScore = participants[1] && (participants[1].score || participants[1].goals) || null;
         }
         
-        // SportMonks state mapping: 1=not started, 2=in progress, 3=finished, etc
+        // SportMonks state mapping: map common state_id values to canonical statuses
+        // Note: providers may use slightly different numeric codes; be tolerant.
         let status = 'UNKNOWN';
-        if (m.state_id === 1) status = 'SCHEDULED';
-        else if (m.state_id === 2) status = 'LIVE';
-        else if (m.state_id === 3 || m.state_id === 4) status = 'FINISHED';
-        else if (m.state_id === 5) status = 'POSTPONED';
+        const sid = Number(m.state_id || m.state || 0);
+        if (sid === 1) status = 'SCHEDULED';
+        else if (sid === 2 || sid === 3) status = 'LIVE';
+        else if (sid === 4) status = 'FINISHED';
+        else if (sid === 5) status = 'POSTPONED';
+        // fallback: if textual state or result_info suggests live, prefer LIVE
+        if (!['LIVE','SCHEDULED','FINISHED','POSTPONED'].includes(String(status))) {
+          const textState = (m.state || m.result_info || '').toString().toLowerCase();
+          if (textState.includes('live') || textState.includes('in progress') || textState.includes('ht') || textState.includes('1st')) {
+            status = 'LIVE';
+          }
+        }
         
         // Extract time: if LIVE, use minute; otherwise use starting_at
         let timeStr = 'TBA';
