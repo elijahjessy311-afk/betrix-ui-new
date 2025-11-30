@@ -16,32 +16,28 @@ const logger = new Logger('SportMonksService');
 export default class SportMonksService {
   constructor(redis = null) {
     this.redis = redis;
-    this.base = (CONFIG.SPORTSMONKS && CONFIG.SPORTSMONKS.BASE) || 'https://api.sportsmonks.com/v3';
+    // Try multiple possible SportMonks endpoints/IPs in order of preference
+    // Primary: official v3 API, Secondary: try without /v3, Tertiary: direct IP if known
+    this.baseUrls = [
+      (CONFIG.SPORTSMONKS && CONFIG.SPORTSMONKS.BASE) || 'https://api.sportsmonks.com/v3',
+      'https://api.sportmonks.com/v3', // alternate spelling (without 's')
+      'https://www.api.sportsmonks.com/v3' // try www prefix
+    ];
+    this.base = this.baseUrls[0];
     // Accept multiple possible env var names for the API token to be resilient
     this.key = (CONFIG.SPORTSMONKS && CONFIG.SPORTSMONKS.KEY) || process.env.SPORTSMONKS_API_KEY || process.env.SPORTSMONKS_API || process.env.SPORTSMONKS_TOKEN || null;
     
-    // Use Cloudflare DNS (1.1.1.1) to bypass DNS poisoning on Render
-    // This ensures we bypass local DNS misconfiguration that routes to B2C Solutions
-    dns.setServers(['1.1.1.1', '1.0.0.1']);
-    
-    // Log DNS resolution for debugging
-    try {
-      const urlObj = new URL(this.base);
-      const hostname = urlObj.hostname;
-      dns.resolve4(hostname, (err, addresses) => {
-        if (err) {
-          logger.warn(`[SportMonksService] DNS resolution failed for ${hostname}: ${err.message}`);
-        } else {
-          logger.info(`[SportMonksService] ✅ DNS resolved ${hostname} to ${addresses.join(', ')} (using Cloudflare DNS)`);
-        }
-      });
-    } catch (e) {
-      logger.warn(`[SportMonksService] Failed to resolve base URL: ${e.message}`);
-    }
+    // Do NOT override DNS globally - that affects all Node requests
+    // Instead, we'll use proxy/agent per-request
+    logger.info(`[SportMonksService] Initialized with base URL: ${this.base}`);
   }
 
   _buildUrl(endpoint, query = {}) {
-    const urlBase = this.base.replace(/\/+$/, '');
+    return this._buildUrlWithBase(this.base, endpoint, query);
+  }
+
+  _buildUrlWithBase(base, endpoint, query = {}) {
+    const urlBase = base.replace(/\/+$/, '');
     const parts = [urlBase, 'football', endpoint].map(p => String(p).replace(/^\/+|\/+$/g, ''));
     const q = Object.assign({}, query);
     if (this.key) q.api_token = this.key;
@@ -51,14 +47,21 @@ export default class SportMonksService {
 
   async _fetch(endpoint, query = {}) {
     const attempts = 3;
+    let lastError = null;
+    
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
-        const url = this._buildUrl(endpoint, query);
-        // Log URL for debugging
+        // Try each base URL variant on first attempt of each cycle
+        const baseUrlIndex = attempt === 1 ? 0 : (attempt === 2 ? 1 : 0);
+        const currentBase = this.baseUrls[baseUrlIndex % this.baseUrls.length];
+        
+        const url = this._buildUrlWithBase(currentBase, endpoint, query);
         const safeUrlForLog = url.replace(/(api_token=[^&]+)/gi, 'api_token=REDACTED');
+        
         if (attempt === 1) {
-          logger.info(`[SportMonksService] Requesting: ${safeUrlForLog}`);
+          logger.info(`[SportMonksService] Requesting (attempt ${attempt}): ${safeUrlForLog}`);
         }
+        
         // Use axios for better TLS control per-service
         const insecure = (process.env.SPORTSMONKS_INSECURE === 'true');
         const agent = new https.Agent({ 
@@ -66,18 +69,13 @@ export default class SportMonksService {
           keepAlive: true,
           maxSockets: 50
         });
+        
         const resp = await axios.get(url, { 
           timeout: 15000, 
           httpsAgent: agent, 
-          headers: { Accept: 'application/json' },
-          // Force Cloudflare DNS for this request
-          lookup: (hostname, opts, cb) => {
-            dns.resolve4(hostname, (err, addresses) => {
-              if (err) return cb(err);
-              cb(null, addresses[0], 4);
-            });
-          }
+          headers: { Accept: 'application/json' }
         });
+        
         const data = resp && resp.data ? resp.data : null;
         // axios throws for non-2xx; still guard
         if (!data) {
