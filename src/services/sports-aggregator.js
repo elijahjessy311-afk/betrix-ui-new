@@ -279,6 +279,7 @@ export class SportsAggregator {
         try {
           logger.debug('📡 Fetching live matches from Football-Data (GLOBAL endpoint)');
           const fdGlobal = await this._getLiveFromFootballDataGlobal();
+          logger.debug(`getAllLiveMatches: FD global returned ${fdGlobal ? fdGlobal.length : 0} matches`);
           if (fdGlobal && fdGlobal.length > 0) {
             const formatted = this._formatMatches(fdGlobal, 'football-data');
             logger.info(`✅ Football-Data (global): Found ${formatted.length} live matches`);
@@ -813,12 +814,18 @@ export class SportsAggregator {
    */
   async _getLiveFromFootballDataGlobal() {
     try {
-      if (!CONFIG.FOOTBALLDATA || !CONFIG.FOOTBALLDATA.KEY) return [];
+      if (!CONFIG.FOOTBALLDATA || !CONFIG.FOOTBALLDATA.KEY) {
+        logger.debug('Football-Data global: not configured');
+        return [];
+      }
       const today = new Date().toISOString().split('T')[0];
       const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const url = `${CONFIG.FOOTBALLDATA.BASE}/matches?dateFrom=${today}&dateTo=${tomorrow}`;
+      logger.debug(`📡 Football-Data global fetch: ${url}`);
       const response = await this._fetchWithRetry(url, { headers: { 'X-Auth-Token': CONFIG.FOOTBALLDATA.KEY } }, 2);
+      logger.debug(`Football-Data global response: ${response ? `${(response.matches || []).length} total matches` : 'no response'}`);
       const matches = (response.matches || []).filter(m => (m.status === 'LIVE' || m.status === 'IN_PLAY'));
+      logger.debug(`Football-Data global: ${matches.length} live/in_play matches found`);
       return matches.slice(0, 200);
     } catch (e) {
       logger.warn('Football-Data global live fetch failed', e?.message || String(e));
