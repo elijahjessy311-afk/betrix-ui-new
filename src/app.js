@@ -1089,7 +1089,7 @@ const start = async () => {
       log("INFO", "INIT", "Admin password initialized");
     }
 
-    // Initialize StatPal startup data feed 🚀
+    // Initialize startup data feed (prefetch initializer)
     try {
       const { default: StartupInitializer } = await import('./services/startup-initializer.js');
       const startupInit = new StartupInitializer(redis);
@@ -1098,14 +1098,14 @@ const start = async () => {
       startupInit.initialize()
         .then(() => {
           const status = startupInit.getStatus();
-          log("INFO", "STARTUP", "StatPal initialization complete", { 
+          log("INFO", "STARTUP", "Startup initialization complete", { 
             ready: status.ready,
             sports: status.sports,
             items: status.totalItems
           });
         })
         .catch(err => {
-          log("WARN", "STARTUP", "StatPal initialization failed, using fallback providers", { 
+          log("WARN", "STARTUP", "Startup initialization failed, using fallback providers", { 
             error: err?.message || String(err) 
           });
         });

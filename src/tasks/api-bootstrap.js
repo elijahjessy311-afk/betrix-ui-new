@@ -89,7 +89,8 @@ export class APIBootstrap {
     };
 
     try {
-      const matches = await this.sportsAggregator.getLiveMatches('football');
+      // Try Premier League as default (39 = PL)
+      const matches = await this.sportsAggregator.getLiveMatches(39, { sport: 'football' });
       if (matches && Array.isArray(matches) && matches.length > 0) {
         results.totalMatches = matches.length;
         logger.info(`✅ Found ${matches.length} live matches from SportMonks/Football-Data`);
@@ -116,9 +117,8 @@ export class APIBootstrap {
     };
 
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-      const fixtures = await this.sportsAggregator.getFixtures(today, tomorrow);
+      // Call getFixtures without league ID to fetch from all major competitions
+      const fixtures = await this.sportsAggregator.getFixtures();
       
       if (fixtures && Array.isArray(fixtures) && fixtures.length > 0) {
         results.totalFixtures = fixtures.length;
@@ -146,7 +146,7 @@ export class APIBootstrap {
     };
 
     try {
-      const odds = await this.sportsAggregator.getOdds('football');
+      const odds = await this.sportsAggregator.getOdds(39, { sport: 'football' });
       
       if (odds && Array.isArray(odds) && odds.length > 0) {
         results.totalOdds = odds.length;

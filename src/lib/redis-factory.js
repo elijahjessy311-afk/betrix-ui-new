@@ -167,3 +167,6 @@ export function getRedis(opts = {}) {
 
   return _instance;
 }
+
+// Export MockRedis so callers can explicitly create an in-memory fallback
+export { MockRedis };

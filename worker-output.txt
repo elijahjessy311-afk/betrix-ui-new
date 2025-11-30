@@ -1,0 +1,38 @@
+[dotenv@17.2.3] injecting env (17) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[2025-11-30T00:23:26.088Z] [INFO] [FinalWorker] ✅ Configuration validated (SPORTSMONKS or FOOTBALLDATA keys accepted)
+[redis-factory] ⚠️  Using MockRedis (no REDIS_URL or USE_MOCK_REDIS=1)
+[2025-11-30T00:23:26.093Z] [INFO] [FinalWorker] ✅ Redis connected (factory)
+[2025-11-30T00:23:26.098Z] [INFO] [FinalWorker] ℹ️ StatPal integration disabled/removed — using SPORTSMONKS and FOOTBALL-DATA only
+[2025-11-30T00:23:26.100Z] [INFO] [APIBootstrap] 🚀 Starting API Bootstrap...
+[2025-11-30T00:23:26.101Z] [INFO] [APIBootstrap] 🚀 Initializing with SportMonks and Football-Data only
+[2025-11-30T00:23:26.102Z] [INFO] [APIBootstrap] ✅ Football-Data.org configured {
+  enabled: true,
+  key: 'bde45bef...80e3',
+  base: 'https://api.football-data.org/v4'
+}
+[2025-11-30T00:23:26.103Z] [INFO] [APIBootstrap] ✅ SportMonks configured {
+  enabled: true,
+  key: 'xWIYIoyw...9rpF',
+  base: 'https://api.sportsmonks.com/v3'
+}
+[2025-11-30T00:23:26.104Z] [INFO] [APIBootstrap] 📊 API Provider Status {
+  timestamp: '2025-11-30T00:23:26.101Z',
+  providers: {
+    FOOTBALLDATA: {
+      enabled: true,
+      key: 'bde45bef...80e3',
+      base: 'https://api.football-data.org/v4'
+    },
+    SPORTSMONKS: {
+      enabled: true,
+      key: 'xWIYIoyw...9rpF',
+      base: 'https://api.sportsmonks.com/v3'
+    }
+  },
+  summary: { enabledProviders: 2, totalChecked: 2, readyForLiveData: true }
+}
+[2025-11-30T00:23:26.106Z] [INFO] [APIBootstrap] ✅ Bootstrap found configured providers
+[2025-11-30T00:23:26.106Z] [INFO] [APIBootstrap] ⏱️  Starting immediate data prefetch (this may take 10-30 seconds)...
+[2025-11-30T00:23:26.107Z] [INFO] [APIBootstrap] 🔄 Prefetching live matches from SportMonks/Football-Data...
+[2025-11-30T00:23:26.757Z] [WARN] [SportMonksService] SportMonks fetch attempt 1
+[2025-11-30T00:23:27.530Z] [WARN] [SportMonksService] SportMonks fetch attempt 2

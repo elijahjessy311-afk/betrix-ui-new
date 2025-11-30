@@ -129,9 +129,7 @@ export function startPrefetchScheduler({ redis, openLiga, rss, scorebat, footbal
               await safeSet('prefetch:sportsmonks:live', { fetchedAt: ts, count: live.length, data: live.slice(0, 50) }, 30);
               await recordSuccess('sportsmonks');
             }
-            const today = new Date().toISOString().split('T')[0];
-            const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-            const fixtures = await sportsAggregator.getFixtures(today, tomorrow).catch(async (err) => { await recordFailure('sportsmonks-fixtures'); return []; });
+            const fixtures = await sportsAggregator.getFixtures().catch(async (err) => { await recordFailure('sportsmonks-fixtures'); return []; });
             if (fixtures && fixtures.length > 0) {
               await safeSet('prefetch:sportsmonks:fixtures', { fetchedAt: ts, count: fixtures.length, data: fixtures.slice(0, 50) }, 60);
               await recordSuccess('sportsmonks-fixtures');

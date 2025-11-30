@@ -34,11 +34,12 @@ const CONFIG = {
     BASE: process.env.FOOTBALLDATA_BASE || 'https://api.football-data.org/v4',
   },
 
-  // SofaScore (RapidAPI)
+  // SofaScore removed from primary providers; keep legacy config (disabled)
   SOFASCORE: {
     BASE: process.env.SOFASCORE_API_BASE || 'https://sofascore.p.rapidapi.com',
     KEY: process.env.SOFASCORE_API_KEY || process.env.RAPIDAPI_KEY,
     HOST: process.env.SOFASCORE_HOST || 'sofascore.p.rapidapi.com',
+    ENABLED: false
   },
 
   // SportsMonks
@@ -47,13 +48,11 @@ const CONFIG = {
     BASE: process.env.SPORTSMONKS_BASE || 'https://api.sportsmonks.com/v3',
   },
 
-  // StatPal (All Sports Data API - Primary Provider)
+  // StatPal removed: no longer used in this deployment
   STATPAL: {
-    KEY: process.env.STATPAL_API || process.env.STATPAL_API_KEY || process.env.STATPAL_ACCESS_KEY || null,
-    BASE: process.env.STATPAL_BASE || 'https://statpal.io/api',
-    V1: 'v1',
-    V2: 'v2',
-    ENABLED: false,
+    KEY: null,
+    BASE: null,
+    ENABLED: false
   },
 
   // Telegram
@@ -171,9 +170,9 @@ const CONFIG = {
   PROVIDERS: {
     SPORTSDATA: { enabled: process.env.PROVIDER_SPORTSDATA_ENABLED === 'true', priority: 1 },
     SPORTSMONKS: { enabled: true, priority: 2 },
-    API_SPORTS: { enabled: process.env.PROVIDER_API_SPORTS_ENABLED === 'true', priority: 3 },
+    API_SPORTS: { enabled: false, priority: 3 },
     FOOTBALLDATA: { enabled: true, priority: 4 },
-    SOFASCORE: { enabled: process.env.PROVIDER_SOFASCORE_ENABLED === 'true', priority: 5 },
+    SOFASCORE: { enabled: false, priority: 5 },
     ALLSPORTS: { enabled: process.env.PROVIDER_ALLSPORTS_ENABLED === 'true', priority: 6 },
     ESPN: { enabled: process.env.PROVIDER_ESPN_ENABLED === 'true', priority: 7 },
     CLAUDE: { enabled: process.env.PROVIDER_CLAUDE_ENABLED === 'true', priority: 0 }
