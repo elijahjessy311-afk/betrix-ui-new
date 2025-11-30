@@ -1351,6 +1351,19 @@ export class SportsAggregator {
           awayScore = at.goals || at.score || null;
         }
         
+        // Strategy 4: Fallback — parse `name` or title fields when teams/participants missing
+        // Many SportMonks raw objects contain a `name` like "Home vs Away" or "Home v Away".
+        if ((homeName === 'Home' && awayName === 'Away') || (!homeName || !awayName)) {
+          const rawTitle = String(m.name || m.title || m.fixture_title || '').trim();
+          if (rawTitle) {
+            // split on common separators: ' vs ', ' v ', ' - ', en-dash, em-dash (case-insensitive)
+            const parts = rawTitle.split(/\s+(?:v(?:s)?\.?|vs\.?|\-|–|—)\s+/i);
+            if (parts && parts.length >= 2) {
+              if (!homeName || homeName === 'Home') homeName = parts[0].trim();
+              if (!awayName || awayName === 'Away') awayName = parts[1].trim();
+            }
+          }
+        }
         // SportMonks state mapping: map common state_id values to canonical statuses
         // Note: providers may use slightly different numeric codes; be tolerant.
         let status = 'UNKNOWN';
