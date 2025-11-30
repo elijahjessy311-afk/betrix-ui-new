@@ -1387,6 +1387,7 @@ export class SportsAggregator {
         else if (m.scheduled_at) timeStr = safe(m.scheduled_at);
         
         logger.debug(`[SPORTSMONKS_FORMAT] ${homeName} vs ${awayName} | status:${status} | home:${homeScore} away:${awayScore}`);
+        logger.info(`[SPORTSMONKS_FORMAT] FORMATTED => home:${homeName} | away:${awayName} | status:${status}`);
         
         return {
           id: m.id || null,
