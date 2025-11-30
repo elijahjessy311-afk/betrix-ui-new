@@ -89,8 +89,8 @@ export class APIBootstrap {
     };
 
     try {
-      // Try Premier League as default (39 = PL)
-      const matches = await this.sportsAggregator.getLiveMatches(39, { sport: 'football' });
+      // Call getAllLiveMatches() to use Football-Data global endpoint (avoids per-league 404s)
+      const matches = await this.sportsAggregator.getAllLiveMatches();
       if (matches && Array.isArray(matches) && matches.length > 0) {
         results.totalMatches = matches.length;
         logger.info(`✅ Found ${matches.length} live matches from SportMonks/Football-Data`);
