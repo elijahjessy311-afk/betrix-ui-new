@@ -47,6 +47,7 @@ import Scrapers from "./services/scrapers.js";
 import { normalizeMatch, chooseBestMatch } from "./services/normalizer.js";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
+import DataExposureHandler from "./handlers/data-exposure-handler.js";
 
 dotenv.config();
 
@@ -1140,6 +1141,19 @@ const start = async () => {
 };
 
 start();
+
+/**
+ * Register data exposure API endpoints
+ * Called from worker-final.js after sportsAggregator is initialized
+ */
+export function registerDataExposureAPI(sportsAggregator) {
+  try {
+    new DataExposureHandler(app, sportsAggregator);
+    log("INFO", "DATA_EXPOSURE", "Data exposure API registered successfully", { endpoints: ['/api/data/summary', '/api/data/live', '/api/data/fixtures', '/api/data/match', '/api/data/standings', '/api/data/leagues', '/api/data/cache-info', '/api/data/cache-cleanup', '/api/data/export', '/api/data/schema'] });
+  } catch (err) {
+    log("ERROR", "DATA_EXPOSURE", "Failed to register data exposure API", { error: err?.message || String(err) });
+  }
+}
 
 // Export core app pieces and initialized data services for other modules
 export { app, server, redis, wss, openLiga, rssAggregator, footballData, scorebat, scrapers };

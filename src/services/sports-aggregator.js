@@ -18,6 +18,7 @@ import { getLiveMatchesFromGoal } from './goal-scraper.js';
 import { getLiveMatchesFromFlashscore, getLiveMatchesByLeagueFromFlashscore } from './flashscore-scraper.js';
 import { ProviderHealth } from '../utils/provider-health.js';
 import SportMonksService from './sportmonks-service.js';
+import RawDataCache from './raw-data-cache.js';
 
 const logger = new Logger('SportsAggregator');
 const SPORTSMONKS_BASE_URL = 'https://api.sportmonks.com/v3';
@@ -45,6 +46,7 @@ export class SportsAggregator {
     this.scorebat = extras.scorebat || null;
     this.rss = extras.rss || null;
     this.openLiga = extras.openLiga || null;
+    this.dataCache = new RawDataCache(redis); // Initialize raw data cache
     // Allowed providers can be passed in extras.allowedProviders as an array
     // e.g. ['SPORTSMONKS','FOOTBALLDATA'] to force the aggregator to only
     // consider those providers regardless of global CONFIG.
@@ -237,6 +239,8 @@ export class SportsAggregator {
           const smMatches = await this.sportmonks.getAllLiveMatches();
           if (smMatches && smMatches.length > 0) {
             logger.info(`✅ SportMonks: Found ${smMatches.length} total live matches globally`);
+            // Store raw data
+            await this.dataCache.storeLiveMatches('sportsmonks', smMatches);
             const formatted = this._formatMatches(smMatches, 'sportsmonks');
             // Filter to only LIVE status matches
             const liveOnly = formatted.filter(m => m.status === 'LIVE');
@@ -271,6 +275,8 @@ export class SportsAggregator {
 
           if (allLive.length > 0) {
             logger.info(`✅ Football-Data: Found ${allLive.length} live matches across major competitions`);
+            // Store raw Football-Data live
+            await this.dataCache.storeLiveMatches('footballdata', allLive);
             this._setCached(cacheKey, allLive);
             await this._recordProviderHealth('footballdata', true, `Found ${allLive.length} live matches`);
             return allLive;
@@ -346,6 +352,8 @@ export class SportsAggregator {
           const smFixtures = await this.sportmonks.getFixtures({ league_id: leagueId });
           if (smFixtures && smFixtures.length > 0) {
             logger.info(`✅ SportMonks: Found ${smFixtures.length} upcoming matches`);
+            // Store raw data
+            await this.dataCache.storeFixtures('sportsmonks', leagueId, smFixtures);
             this._setCached(cacheKey, smFixtures);
             await this._recordProviderHealth('sportsmonks', true, `Found ${smFixtures.length} upcoming matches`);
             return this._formatMatches(smFixtures, 'sportsmonks');
@@ -363,6 +371,8 @@ export class SportsAggregator {
           const fdMatches = await this._getUpcomingFromFootballData(leagueId);
           if (fdMatches && fdMatches.length > 0) {
             logger.info(`✅ Football-Data: Found ${fdMatches.length} upcoming matches`);
+            // Store raw data
+            await this.dataCache.storeFixtures('footballdata', leagueId, fdMatches);
             this._setCached(cacheKey, fdMatches);
             await this._recordProviderHealth('footballdata', true, `Found ${fdMatches.length} upcoming matches`);
             return this._formatMatches(fdMatches, 'footballdata');

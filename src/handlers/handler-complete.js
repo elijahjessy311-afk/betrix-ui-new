@@ -277,17 +277,15 @@ export async function handleCallbackQuery(cq, redis, services) {
     // ========================================================================
 
     if (data === 'menu_fixtures') {
-      // use sportsAggregator to fetch today's and tomorrow's fixtures
-      const today = new Date().toISOString().split('T')[0];
-      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-      const fixtures = (services && services.sportsAggregator) ? await services.sportsAggregator.getFixtures(today, tomorrow) : [];
+      // use sportsAggregator to fetch upcoming fixtures (no date params needed)
+      const fixtures = (services && services.sportsAggregator) ? await services.sportsAggregator.getFixtures() : [];
 
       if (!fixtures || fixtures.length === 0) {
         return {
           method: 'editMessageText',
           chat_id: chatId,
           message_id: messageId,
-          text: `⚠️ No upcoming fixtures found for ${today} - ${tomorrow}`,
+          text: `⚠️ No upcoming fixtures found`,
           reply_markup: { inline_keyboard: [[{ text: '🏟 See Live Matches', callback_data: 'live_games' }, { text: '🔙 Back', callback_data: 'menu_main' }]] },
           parse_mode: 'Markdown'
         };
@@ -327,9 +325,7 @@ export async function handleCallbackQuery(cq, redis, services) {
 
     if (data.startsWith('fixture:')) {
       const fixtureId = data.split(':')[1];
-      const today = new Date().toISOString().split('T')[0];
-      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-      const fixtures = (services && services.sportsAggregator) ? await services.sportsAggregator.getFixtures(today, tomorrow) : [];
+      const fixtures = (services && services.sportsAggregator) ? await services.sportsAggregator.getFixtures() : [];
       const fixture = fixtures.find(f => String(f.id) === String(fixtureId));
       if (!fixture) {
         return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: '⚠️ Fixture not found', show_alert: false };

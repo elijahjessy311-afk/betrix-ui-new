@@ -46,6 +46,7 @@ import v2Handler from "./handlers/telegram-handler-v2-clean.js";
 import completeHandler from "./handlers/handler-complete.js";
 import SportMonksAPI from "./services/sportmonks-api.js";
 import SportsDataAPI from "./services/sportsdata-api.js";
+import { registerDataExposureAPI } from "./app.js";
 
 // ===== PREMIUM ENHANCEMENT MODULES =====
 import premiumUI from "./utils/premium-ui-builder.js";
@@ -280,6 +281,14 @@ try {
   logger.info('Prefetch scheduler started', { intervalSeconds: Number(process.env.PREFETCH_INTERVAL_SECONDS || 60) });
 } catch (e) {
   logger.warn('Prefetch scheduler failed to start', e?.message || String(e));
+}
+
+// Register Data Exposure API endpoints for accessing cached sports data
+try {
+  registerDataExposureAPI(sportsAggregator);
+  logger.info('✅ Data Exposure API registered - access at /api/data/*');
+} catch (e) {
+  logger.warn('Failed to register Data Exposure API', e?.message || String(e));
 }
 
 // Subscribe to prefetch events for internal observability and reactive caching
