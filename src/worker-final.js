@@ -12,6 +12,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import Redis from "ioredis";
+import { getRedis, MockRedis } from "./lib/redis-factory.js";
 import { CONFIG, validateConfig } from "./config.js";
 import { Logger } from "./utils/logger.js";
 import { TelegramService } from "./services/telegram.js";
@@ -34,7 +35,6 @@ import OddsAnalyzer from "./services/odds-analyzer.js";
 import { MultiSportAnalyzer } from "./services/multi-sport-analyzer.js";
 import { startPrefetchScheduler } from "./tasks/prefetch-scheduler.js";
 import { APIBootstrap } from "./tasks/api-bootstrap.js";
-import { StatPalInit } from "./tasks/statpal-init.js";
 import CacheService from "./services/cache.js";
 import { AdvancedHandler } from "./advanced-handler.js";
 import { PremiumService } from "./services/premium.js";
@@ -65,14 +65,34 @@ try {
   process.exit(1);
 }
 
-// If REDIS_URL is not provided in env, allow using an explicit fallback (use with caution)
-if (!process.env.REDIS_URL && typeof process !== 'undefined') {
-  // No-op: leave to env. You can set REDIS_URL externally to avoid embedding secrets in code.
+// Initialize Redis with a safe fallback to in-memory MockRedis for local dev
+let redis;
+try {
+  // getRedis will return a MockRedis when REDIS_URL is not set. If a REDIS_URL
+  // is set but authentication fails (NOAUTH), we'll detect it via ping()
+  redis = getRedis();
+  try {
+    // test connectivity; if this throws (NOAUTH etc.) we fallback
+    if (typeof redis.ping === 'function') await redis.ping();
+    logger.info("✅ Redis connected (factory)");
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (msg.includes('NOAUTH')) {
+      logger.warn('⚠️ Redis authentication failed (NOAUTH). Falling back to in-memory MockRedis for local dev');
+    } else {
+      logger.warn('⚠️ Redis ping failed, using in-memory MockRedis for local dev', msg);
+    }
+    redis = new MockRedis();
+  }
+} catch (e) {
+  logger.warn('⚠️ Redis initialization failed, using in-memory MockRedis', e?.message || String(e));
+  redis = new MockRedis();
 }
 
-const redis = new Redis(CONFIG.REDIS_URL);
-redis.on("error", err => logger.error("Redis error", err));
-redis.on("connect", () => logger.info("✅ Redis connected"));
+// attach a safe error handler to avoid unhandled errors
+if (redis && typeof redis.on === 'function') {
+  try { redis.on('error', (err) => logger.error('Redis error', err)); } catch(e){}
+}
 
 // small sleep helper used in the main loop
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -232,29 +252,9 @@ const basicHandlers = new BotHandlers(telegram, userService, apiFootball, ai, re
   scrapers,
 });
 
-// ===== STATPAL INITIALIZATION: Test API key and prefetch ALL sports data =====
+// StatPal integration removed: system now uses SPORTSMONKS and FOOTBALLDATA only
 let statpalInitSuccess = false;
-try {
-  if (CONFIG.STATPAL && CONFIG.STATPAL.ENABLED) {
-    const statpalInit = new StatPalInit(redis, CONFIG.STATPAL.KEY);
-    const statpalResult = await statpalInit.initialize();
-    statpalInitSuccess = statpalResult.success;
-
-    if (statpalResult.success) {
-      logger.info('✅ StatPal Initialization successful', {
-        apiKey: statpalResult.results.apiKey,
-        totalDataPoints: statpalResult.results.totalDataPoints,
-        sportsWithData: Object.keys(statpalResult.results.sports).length
-      });
-    } else {
-      logger.error('❌ StatPal Initialization failed', statpalResult.results.errors);
-    }
-  } else {
-    logger.info('ℹ️ StatPal initialization skipped (disabled in config)');
-  }
-} catch (e) {
-  logger.error('StatPal initialization error', e?.message || String(e));
-}
+logger.info('ℹ️ StatPal integration disabled/removed — using SPORTSMONKS and FOOTBALL-DATA only');
 
 // ===== API BOOTSTRAP: Validate keys and immediately prefetch data =====
 let apiBootstrapSuccess = false;
@@ -300,10 +300,33 @@ try {
     } catch (e) { logger.warn('Failed reactive prefetch action', e?.message || String(e)); }
   });
 } catch (e) { logger.warn('Prefetch subscriber failed to start', e?.message || String(e)); }
-// Inject Redis into v2 handler for telemetry wiring
+// If we're running with an in-memory MockRedis, skip creating a separate
+// subscriber connection because MockRedis doesn't implement pub/sub.
+try {
+  const isMock = redis && redis.constructor && redis.constructor.name === 'MockRedis';
+  if (!isMock && CONFIG.REDIS_URL) {
+    const sub = new Redis(CONFIG.REDIS_URL);
+    sub.subscribe('prefetch:updates', 'prefetch:error').then(() => logger.info('Subscribed to prefetch pub/sub channels')).catch(()=>{});
+    sub.on('message', async (channel, message) => {
+      let payload = message;
+      try { payload = JSON.parse(message); } catch (e) { /* raw */ }
+      logger.info('Prefetch event', { channel, payload });
+      try {
+        if (channel === 'prefetch:updates' && payload && payload.type === 'openligadb') {
+          await redis.set('prefetch:last:openligadb', Date.now());
+          await redis.expire('prefetch:last:openligadb', 300);
+        }
+      } catch (e) { logger.warn('Failed reactive prefetch action', e?.message || String(e)); }
+    });
+  } else {
+    logger.info('ℹ️ Pub/sub disabled: using in-memory MockRedis for local development');
+  }
+} catch (e) {
+  logger.warn('Prefetch subscriber failed to start', e?.message || String(e));
+}
+// Inject Redis into v2 handler for telemetry wiring (no-op for MockRedis)
 if (typeof v2Handler.setTelemetryRedis === 'function') {
-  v2Handler.setTelemetryRedis(redis);
-  logger.info('✅ Telemetry Redis injected into v2Handler');
+  try { v2Handler.setTelemetryRedis(redis); logger.info('✅ Telemetry Redis injected into v2Handler'); } catch(e){}
 }
 
 // ===== INITIALIZE PERFORMANCE OPTIMIZER =====

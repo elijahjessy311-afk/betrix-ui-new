@@ -62,14 +62,12 @@ console.log();
 const REQUIRED_CONFIGURATION = {
   REDIS_URL,
   TELEGRAM_TOKEN,
-  API_FOOTBALL_KEY,
-  API_FOOTBALL_BASE
+  // API_FOOTBALL is deprecated for this deployment; SportMonks/Football-Data are primary
 };
 
 for (const [configKey, configValue] of Object.entries(REQUIRED_CONFIGURATION)) {
   if (!configValue) {
-    console.error(`[FATAL] ❌ Missing required configuration: ${configKey} - worker.js:71`);
-    process.exit(1);
+    console.warn(`[WARN] Missing recommended configuration: ${configKey} - worker.js`);
   }
 }
 
