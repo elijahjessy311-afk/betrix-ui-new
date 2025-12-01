@@ -252,9 +252,17 @@ try {
 
   sub.on('message', (channel, message) => {
     let payload = message;
-    try { payload = JSON.parse(message); } catch (e) { /* keep raw */ }
+    try {
+      payload = JSON.parse(message);
+    } catch (e) {
+      // keep raw payload if JSON parse fails
+    }
     log('INFO', 'PREFETCH', `pubsub:${channel}`, { payload });
-    try { broadcastToAdmins({ type: channel, data: payload }); } catch (e) { console.error('broadcast prefetch failed - app.js:269', e); }
+    try {
+      broadcastToAdmins({ type: channel, data: payload });
+    } catch (e) {
+      console.error('broadcast prefetch failed - app.js:269', e);
+    }
   });
 } catch (e) {
   console.error('prefetch subscriber failed to start - app.js:272', e);
