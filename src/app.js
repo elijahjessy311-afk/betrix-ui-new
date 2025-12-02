@@ -780,8 +780,10 @@ app.get("/admin/provider-health", async (req, res) => {
 
     // Log a short fingerprint of the configured secret (does not reveal the secret)
     try {
-      const secretFingerprint = process.env.LIPANA_SECRET ? crypto.createHash('sha256').update(String(process.env.LIPANA_SECRET)).digest('hex').slice(0,8) : '(no-secret)';
-      console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:1114', secretFingerprint);
+      const _rawSecret = process.env.LIPANA_SECRET ? String(process.env.LIPANA_SECRET) : '';
+      const trimmedSecret = _rawSecret.trim();
+      const secretFingerprint = trimmedSecret ? crypto.createHash('sha256').update(trimmedSecret).digest('hex').slice(0,8) : '(no-secret)';
+      console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:786', secretFingerprint);
     } catch (e) {
       // ignore logging errors
     }
@@ -1100,19 +1102,22 @@ function verifySignature(req) {
 
   // Raw bytes from the global JSON parser verify hook
   const raw = req.rawBody || (req.body ? Buffer.from(JSON.stringify(req.body), 'utf8') : Buffer.from(''));
-  if (!process.env.LIPANA_SECRET) return false;
 
-  const expectedHex = crypto.createHmac('sha256', process.env.LIPANA_SECRET).update(raw).digest('hex');
-  const expectedBase64 = crypto.createHmac('sha256', process.env.LIPANA_SECRET).update(raw).digest('base64');
+  // Use a trimmed secret to avoid accidental whitespace/newline mismatches
+  const _rawSecret = process.env.LIPANA_SECRET ? String(process.env.LIPANA_SECRET) : '';
+  const lipanaSecret = _rawSecret.trim();
+  if (!lipanaSecret) return false;
 
-  // Masked logging for debugging (do not log secrets)
+  const expectedHex = crypto.createHmac('sha256', lipanaSecret).update(raw).digest('hex');
+  const expectedBase64 = crypto.createHmac('sha256', lipanaSecret).update(raw).digest('base64');
+
+  // Additional explicit debug logging requested: print fingerprint and both signatures
   try {
-    console.log('[verifySignature] received(masked)= - app.js:1102', `${signature.slice(0,8)}...len:${signature.length}`);
-  } catch (e) {
-    // ignore logging errors
-  }
-  try {
-    console.log('[verifySignature] expectedHex(first8)= - app.js:1107', expectedHex.slice(0,8));
+    const fingerprint = crypto.createHash('sha256').update(lipanaSecret).digest('hex').substring(0,8);
+    console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:1116', fingerprint);
+    console.log('[verifySignature] Incoming signature(header)= - app.js:1117', signature);
+    console.log('[verifySignature] Computed expectedHex(first16)= - app.js:1118', expectedHex.slice(0,16), '...');
+    console.log('[verifySignature] Computed expectedBase64(first16)= - app.js:1119', expectedBase64.slice(0,16), '...');
   } catch (e) {
     // ignore logging errors
   }
