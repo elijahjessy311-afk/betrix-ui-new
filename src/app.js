@@ -179,7 +179,7 @@ const broadcastToAdmins = message => {
 wss.on("connection", (ws, req) => {
   const clientId = Math.random().toString(36).slice(2, 11);
   activeConnections.add(ws);
-  clientSubscriptions.set(ws, new Set();
+  clientSubscriptions.set(ws, new Set());
   log("INFO", "WEBSOCKET", "Client connected", { clientId, ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress, total: activeConnections.size });
 
   safeSend(ws, { type: "welcome", data: { brand: BETRIX.name, version: BETRIX.version, clientId, ts: new Date().toISOString() } });
@@ -210,7 +210,7 @@ const handleWebSocketMessage = (ws, data, clientId) => {
       const channels = Array.isArray(data.channels) ? data.channels : [data.channels].filter(Boolean);
       const subs = clientSubscriptions.get(ws) || new Set();
       channels.forEach(c => subs.add(c);
-      clientSubscriptions.set(ws, subs);
+      clientSubscriptions.set(ws, new Set());
       log("INFO", "WEBSOCKET", "Subscribed", { clientId, channels });
       safeSend(ws, { type: "subscribed", channels, ts: Date.now() });
       break;
@@ -219,7 +219,7 @@ const handleWebSocketMessage = (ws, data, clientId) => {
       const channels = Array.isArray(data.channels) ? data.channels : [data.channels].filter(Boolean);
       const subs = clientSubscriptions.get(ws) || new Set();
       channels.forEach(c => subs.delete(c);
-      clientSubscriptions.set(ws, subs);
+      clientSubscriptions.set(ws, new Set());
       log("INFO", "WEBSOCKET", "Unsubscribed", { clientId, channels });
       safeSend(ws, { type: "unsubscribed", channels });
       break;
