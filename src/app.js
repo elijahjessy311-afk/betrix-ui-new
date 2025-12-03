@@ -186,7 +186,7 @@ wss.on("connection", (ws, req) => {
 
   ws.on("message", raw => {
     try {
-      const data = JSON.parse(String(raw);
+      const data = JSON.parse(String(raw));
       handleWebSocketMessage(ws, data, clientId);
     } catch (err) {
       log("ERROR", "WEBSOCKET", "Invalid WS message", { clientId, err: err.message });
