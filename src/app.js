@@ -69,7 +69,9 @@ app.get("/admin/webhook-fallback", (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});\napp.listen(10000);
+});
+app.listen(10000);
 
 export default app;
+
 
