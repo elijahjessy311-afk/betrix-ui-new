@@ -200,7 +200,7 @@ wss.on("connection", (ws, req) => {
     log("INFO", "WEBSOCKET", "Client disconnected", { clientId, remaining: activeConnections.size });
   });
 
-  ws.on("error", err => log("ERROR", "WEBSOCKET", "WS error", { clientId, err: err.message });
+  ws.on("error", err => log("ERROR", "WEBSOCKET", "WS error", { clientId, err: err.message }));
 });
 
 const handleWebSocketMessage = (ws, data, clientId) => {
