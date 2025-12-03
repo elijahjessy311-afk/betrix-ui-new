@@ -124,7 +124,7 @@ const redis = getRedis();
 const wss = new WebSocketServer({ server });
 
 // Postgres connection via env var (used for generic webhook ingestion)
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }));
 
 // Instantiate free-data services
 const openLiga = new OpenLigaDBService();
