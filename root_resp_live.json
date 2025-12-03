@@ -1,0 +1,51 @@
+{
+  "brand": {
+    "name": "BETRIX",
+    "version": "3.0.0",
+    "slogan": "Intelligent Sports Betting Analytics"
+  },
+  "status": "operational",
+  "uptime": 1575.352862059,
+  "endpoints": {
+    "dashboard": "/dashboard",
+    "monitor": "/monitor.html",
+    "api": "/api/v1",
+    "admin": "/admin",
+    "webhooks": "/webhook",
+    "payments": "/paypal",
+    "health": "/health",
+    "metrics": "/metrics"
+  },
+  "menu": [
+    {
+      "name": "Dashboard",
+      "path": "/dashboard",
+      "icon": "📊"
+    },
+    {
+      "name": "Live Odds",
+      "path": "/odds",
+      "icon": "🎯"
+    },
+    {
+      "name": "Predictions",
+      "path": "/predictions",
+      "icon": "🔮"
+    },
+    {
+      "name": "Leaderboard",
+      "path": "/leaderboard",
+      "icon": "🏆"
+    },
+    {
+      "name": "Analytics",
+      "path": "/analytics",
+      "icon": "📈"
+    },
+    {
+      "name": "Payments",
+      "path": "/payments",
+      "icon": "💳"
+    }
+  ]
+}

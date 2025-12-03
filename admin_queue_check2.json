@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "data": {
+    "telegram_updates": 0,
+    "telegram_callbacks": 0,
+    "worker_heartbeat": 1764769720032,
+    "commit": "9e9496ea8cd21333d2b13f09d552c7fe595ce2e9"
+  },
+  "message": "Queue status",
+  "timestamp": "2025-12-03T13:48:48.866Z",
+  "brand": "BETRIX"
+}

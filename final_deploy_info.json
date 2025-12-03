@@ -1,0 +1,14 @@
+{
+  "id": "dep-d4o2i7a4d50c73a7qrog",
+  "commit": {
+    "id": "9e9496ea8cd21333d2b13f09d552c7fe595ce2e9",
+    "message": "ci: trigger redeploy with latest STK wiring",
+    "createdAt": "2025-12-03T10:58:32Z"
+  },
+  "status": "live",
+  "trigger": "api",
+  "createdAt": "2025-12-03T12:12:16.868293Z",
+  "updatedAt": "2025-12-03T12:14:21.466299Z",
+  "startedAt": "2025-12-03T12:12:16.688841Z",
+  "finishedAt": "2025-12-03T12:13:52.502768Z"
+}

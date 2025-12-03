@@ -1,0 +1,79 @@
+{
+  "Headers": {
+    "cross-origin-resource-policy": [
+      "same-origin"
+    ],
+    "cross-origin-opener-policy": [
+      "same-origin"
+    ],
+    "Connection": [
+      "keep-alive"
+    ],
+    "Content-Security-Policy": [
+      "default-src 'self';script-src 'self' 'unsafe-inline';style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;img-src 'self' data: https:;connect-src 'self' https://api.telegram.org https://api.paypal.com;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+    ],
+    "x-download-options": [
+      "noopen"
+    ],
+    "Access-Control-Allow-Credentials": [
+      "true"
+    ],
+    "Referrer-Policy": [
+      "no-referrer"
+    ],
+    "Alt-Svc": [
+      "h3=\":443\""
+    ],
+    "Vary": [
+      "Access-Control-Request-Headers"
+    ],
+    "Access-Control-Allow-Methods": [
+      "GET,POST,PUT,DELETE,OPTIONS"
+    ],
+    "x-dns-prefetch-control": [
+      "off"
+    ],
+    "x-render-origin-server": [
+      "Render"
+    ],
+    "Strict-Transport-Security": [
+      "max-age=31536000; includeSubDomains; preload"
+    ],
+    "Content-Length": [
+      "0"
+    ],
+    "X-Content-Type-Options": [
+      "nosniff"
+    ],
+    "x-permitted-cross-domain-policies": [
+      "none"
+    ],
+    "origin-agent-cluster": [
+      "?1"
+    ],
+    "X-XSS-Protection": [
+      "0"
+    ],
+    "Date": [
+      "Wed, 03 Dec 2025 13:36:17 GMT"
+    ],
+    "Server": [
+      "cloudflare"
+    ],
+    "cf-cache-status": [
+      "DYNAMIC"
+    ],
+    "CF-RAY": [
+      "9a8373b7c9bb06d3-CPT"
+    ],
+    "rndr-id": [
+      "2e50f356-3b55-476e"
+    ],
+    "X-Frame-Options": [
+      "SAMEORIGIN"
+    ],
+    "Access-Control-Allow-Origin": [
+      "*"
+    ]
+  }
+}
