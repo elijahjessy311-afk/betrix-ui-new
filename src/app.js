@@ -75,21 +75,21 @@ const BETRIX = {
       { name: "Predictions", path: "/predictions", icon: "🔮" },
       { name: "Leaderboard", path: "/leaderboard", icon: "🏆" },
       { name: "Analytics", path: "/analytics", icon: "📈" },
-      { name: "Payments", path: "/payments", icon: "💳" }
+      { name: "Payments", path: "/payments", icon: "💳" });
     ],
     admin: [
       { name: "Overview", path: "/admin", icon: "🖥️" },
       { name: "Users", path: "/admin/users", icon: "👥" },
       { name: "Payments", path: "/admin/payments", icon: "💰" },
       { name: "Analytics", path: "/admin/analytics", icon: "📊" },
-      { name: "Settings", path: "/admin/settings", icon: "⚙️" }
+      { name: "Settings", path: "/admin/settings", icon: "⚙️" });
     ]
   },
   pricing: {
     free: { name: "Free", price: 0, features: ["Basic Predictions", "Limited Access"] },
     member: { name: "Member", price: 150, features: ["Advanced analytics", "Priority support"] },
-    vvip: { name: "VVIP", price: 200, features: ["AI Coach", "Exclusive content"] }
-  }
+    vvip: { name: "VVIP", price: 200, features: ["AI Coach", "Exclusive content"] });
+  });
 };
 
 // ============================================================================
@@ -110,14 +110,14 @@ app.post('/__debug__webhook_echo', express.json({ limit: '1mb', verify: (req, _r
       if (k.startsWith('x-') || k.includes('signature') || k.includes('lipana')) {
         const v = String(req.headers[k] || '');
         headers[k] = v ? `${v.slice(0,12)}...len:${v.length}` : '(empty)';
-      }
-}
+      });
+});
     const rawPreview = (req.rawBody && req.rawBody.slice(0, 200).toString('utf8')) || JSON.stringify(req.body || {});
     return res.status(200).json({ ok: true, path: req.path, headerPreview: headers, rawPreview });
   } catch (e) {
     return res.status(500).json({ ok: false, err: String(e) });
-  }
-}
+  });
+});
 
 const server = createServer(app);
 const redis = getRedis();
@@ -138,7 +138,7 @@ const sportsAggregator = new SportsAggregator(redis, {
   scorebat,
   rss: rssAggregator,
   openLiga
-}
+});
 
 // ============================================================================
 // LOGGING
@@ -147,7 +147,7 @@ const LOG_STREAM_KEY = "system:logs";
 const LOG_KEEP = 2000;
 
 const safeJson = v => {
-  try { return JSON.stringify(v); } catch { return String(v); }
+  try { return JSON.stringify(v); } catch { return String(v); });
 };
 
 const log = (level, moduleName, message, data = null) => {
@@ -168,7 +168,7 @@ const activeConnections = new Set();
 const clientSubscriptions = new Map();
 
 const safeSend = (ws, payload) => {
-  try { if (ws && ws.readyState === 1) ws.send(JSON.stringify(payload)); } catch {}
+  try { if (ws && ws.readyState === 1) ws.send(JSON.stringify(payload)); } catch {});
 };
 
 const broadcastToAdmins = message => {
@@ -191,20 +191,20 @@ wss.on("connection", (ws, req) => {
     } catch (err) {
       log("ERROR", "WEBSOCKET", "Invalid WS message", { clientId, err: err.message });
       safeSend(ws, { type: "error", error: "Invalid message format" });
-    }
-}
+    });
+});
 
   ws.on("close", () => {
     activeConnections.delete(ws);
     clientSubscriptions.delete(ws);
     log("INFO", "WEBSOCKET", "Client disconnected", { clientId, remaining: activeConnections.size });
-}
+});
 
   ws.on("error", err => log("ERROR", "WEBSOCKET", "WS error", { clientId, err: err.message }));
-}
+});
 
 const handleWebSocketMessage = (ws, data, clientId) => {
-  if (!data || typeof data.type !== "string") { safeSend(ws, { type: "error", error: "Missing message type" }); return; }
+  if (!data || typeof data.type !== "string") { safeSend(ws, { type: "error", error: "Missing message type" }); return; });
   switch (data.type) {
     case "subscribe": {
       const channels = Array.isArray(data.channels) ? data.channels : [data.channels].filter(Boolean);
@@ -214,7 +214,7 @@ const handleWebSocketMessage = (ws, data, clientId) => {
       log("INFO", "WEBSOCKET", "Subscribed", { clientId, channels });
       safeSend(ws, { type: "subscribed", channels, ts: Date.now() });
       break;
-    }
+    });
     case "unsubscribe": {
       const channels = Array.isArray(data.channels) ? data.channels : [data.channels].filter(Boolean);
       const subs = clientSubscriptions.get(ws) || new Set();
@@ -223,13 +223,13 @@ const handleWebSocketMessage = (ws, data, clientId) => {
       log("INFO", "WEBSOCKET", "Unsubscribed", { clientId, channels });
       safeSend(ws, { type: "unsubscribed", channels });
       break;
-    }
+    });
     case "ping": safeSend(ws, { type: "pong", ts: Date.now(), clientId }); break;
     case "get-stats": safeSend(ws, { type: "stats", data: { uptime: process.uptime(), ts: Date.now() } }); break;
     default:
       log("WARN", "WEBSOCKET", "Unknown WS type", { clientId, type: data.type });
       safeSend(ws, { type: "error", error: "Unknown message type" });
-  }
+  });
 };
 
 // ============================================================================
@@ -254,17 +254,17 @@ try {
       payload = JSON.parse(message);
     } catch (e) {
       // keep raw payload if JSON parse fails
-    }
+    });
     log('INFO', 'PREFETCH', `pubsub:${channel}`, { payload });
     try {
       broadcastToAdmins({ type: channel, data: payload });
     } catch (e) {
       console.error('broadcast prefetch failed - app.js:262', e);
-    }
-}
+    });
+});
 } catch (e) {
   console.error('prefetch subscriber failed to start - app.js:266', e);
-}
+});
 
 // ============================================================================
 // MIDDLEWARE
@@ -277,17 +277,17 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "https://api.telegram.org", "https://api.paypal.com"]
-    }
+    });
   },
-  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
-}
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true });
+});
 
 app.use(cors({
   origin: ALLOWED_ORIGINS === "*" ? "*" : ALLOWED_ORIGINS.split(",").map(s => s.trim()),
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
   optionsSuccessStatus: 200
-}
+});
 
 app.use(compression();
 app.use(morgan(isProd ? "combined" : "dev");
@@ -306,15 +306,15 @@ app.use((req, res, next) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
-  }
+  });
   next();
-}
+});
 
 app.use((req, res, next) => {
   res.setHeader("X-Powered-By", `${BETRIX.name}/${BETRIX.version}`);
   res.setHeader("X-Content-Type-Options", "nosniff");
   next();
-}
+});
 
 // ============================================================================
 // RATE LIMITING (proxy-aware key generator using req.ip)
@@ -334,9 +334,9 @@ const baseLimiter = (windowMs, max, message) =>
       } catch (e) {
         // Fallback: proxy-aware req.ip or first X-Forwarded-For entry
         return req.ip || (req.headers["x-forwarded-for"] || "").split(",")[0]?.trim() || "unknown";
-      }
-    }
-}
+      });
+    });
+});
 
 const freeLimiter = baseLimiter(60 * 1000, 30, "Rate limit exceeded. Upgrade for higher limits.");
 const memberLimiter = baseLimiter(60 * 1000, 60, "Rate limit exceeded for member tier.");
@@ -351,7 +351,7 @@ const getUserTier = async userId => {
   } catch (err) {
     log("WARN", "TIER", "Redis tier lookup failed", { err: err.message });
     return "free";
-  }
+  });
 };
 
 const tierBasedRateLimiter = async (req, res, next) => {
@@ -366,7 +366,7 @@ const tierBasedRateLimiter = async (req, res, next) => {
   } catch (err) {
     log("ERROR", "RATELIMIT", "Tier limiter error", { err: err.message });
     return freeLimiter(req, res, next);
-  }
+  });
 };
 
 // ============================================================================
@@ -383,13 +383,13 @@ app.use('/webhook', (req, _res, next) => {
       const v = String(req.headers[k] || '').trim();
       // Mask the value but show prefix for debugging (first 8 chars)
       preview[k] = v ? `${v.slice(0,8)}...len:${v.length}` : '(empty)';
-}
+});
     console.log('[WEBHOOKDEBUG] path= - app.js:387', req.path, 'headerPreview=', preview);
   } catch (e) {
     // ignore logging errors
-  }
+  });
   return next();
-}
+});
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -399,17 +399,17 @@ const upload = multer({
     const allowed = /jpeg|jpg|png|gif|pdf|txt|csv/;
     const ext = path.extname(file.originalname || "").toLowerCase();
     const ok = allowed.test(ext) && allowed.test(file.mimetype);
-    if (ok) { log("INFO", "UPLOAD", "Accepted file", { filename: file.originalname, mimetype: file.mimetype }); cb(null, true); }
-    else { log("WARN", "UPLOAD", "Rejected file", { filename: file.originalname, mimetype: file.mimetype }); cb(new Error("Invalid file type"); }
-  }
-}
+    if (ok) { log("INFO", "UPLOAD", "Accepted file", { filename: file.originalname, mimetype: file.mimetype }); cb(null, true); });
+    else { log("WARN", "UPLOAD", "Rejected file", { filename: file.originalname, mimetype: file.mimetype }); cb(new Error("Invalid file type"); });
+  });
+});
 
 // ============================================================================
 // AUTH (Admin Basic + bcrypt + Redis)
  // ============================================================================
 const authenticateAdmin = async (req, res, next) => {
   const header = req.headers.authorization;
-  if (!header || !header.startsWith("Basic ")) { log("WARN", "AUTH", "Missing Basic auth"); return res.status(401).json({ error: "Admin authentication required" }); }
+  if (!header || !header.startsWith("Basic ")) { log("WARN", "AUTH", "Missing Basic auth"); return res.status(401).json({ error: "Admin authentication required" }); });
   try {
     const creds = Buffer.from(header.slice(6), "base64").toString();
     const [username, password] = creds.split(":");
@@ -419,13 +419,13 @@ const authenticateAdmin = async (req, res, next) => {
       await redis.set("admin:password", hash);
       storedHash = hash;
       log("INFO", "AUTH", "Initialized admin password hash");
-    }
+    });
     const valid = await bcrypt.compare(password, storedHash);
-    if (username === ADMIN_USERNAME && valid) { req.adminUser = username; log("INFO", "AUTH", "Admin authenticated", { username }); return next(); }
+    if (username === ADMIN_USERNAME && valid) { req.adminUser = username; log("INFO", "AUTH", "Admin authenticated", { username }); return next(); });
     log("WARN", "AUTH", "Invalid admin credentials", { username }); return res.status(401).json({ error: "Invalid admin credentials" });
   } catch (err) {
     log("ERROR", "AUTH", "Auth error", { err: err.message }); return res.status(500).json({ error: "Authentication failed" });
-  }
+  });
 };
 
 // ============================================================================
@@ -444,7 +444,7 @@ const queueJob = async (type, payload, priority = "normal") => {
       await redis.rpush("telegram:updates", JSON.stringify(payload);
       log("INFO", "QUEUE", "Queued telegram:update to telegram:updates", { id, size: JSON.stringify(payload).length });
       return id;
-    }
+    });
 
     await redis.rpush(`jobs:${priority}`, JSON.stringify(job);
     log("INFO", "QUEUE", "Queued job", { id, type, priority });
@@ -452,7 +452,7 @@ const queueJob = async (type, payload, priority = "normal") => {
   } catch (err) {
     log("ERROR", "QUEUE", "Queue push failed", { err: err.message });
     throw err;
-  }
+  });
 };
 
 // ============================================================================
@@ -465,12 +465,12 @@ app.get("/", (req, res) => {
     uptime: process.uptime(),
     endpoints: { dashboard: "/dashboard", monitor: "/monitor.html", api: "/api/v1", admin: "/admin", webhooks: "/webhook", payments: "/paypal", health: "/health", metrics: "/metrics" },
     menu: BETRIX.menu?.main || []
-}
-}
+});
+});
 
 app.get("/health", (req, res) => {
   res.json(formatResponse(true, { status: "healthy", uptime: process.uptime(), redis: true, version: BETRIX.version }, "All systems operational");
-}
+});
 
 app.get("/metrics", async (req, res) => {
   try {
@@ -478,8 +478,8 @@ app.get("/metrics", async (req, res) => {
     res.json(formatResponse(true, { uptime: process.uptime(), logs: logCount }, "Metrics");
   } catch (err) {
     res.status(500).json(formatResponse(false, null, "Metrics fetch failed");
-  }
-}
+  });
+});
 
 // Simple endpoints for free sources
 app.get('/openligadb/leagues', async (req, res) => {
@@ -489,8 +489,8 @@ app.get('/openligadb/leagues', async (req, res) => {
   } catch (err) {
     log('ERROR', 'OPENLIGA', 'Failed to fetch leagues', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch leagues');
-  }
-}
+  });
+});
 
 app.get('/openligadb/matchdata', async (req, res) => {
   try {
@@ -503,8 +503,8 @@ app.get('/openligadb/matchdata', async (req, res) => {
   } catch (err) {
     log('ERROR', 'OPENLIGA', 'Matchdata fetch failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch match data');
-  }
-}
+  });
+});
 
 // Friendly live wrapper: best-effort recent matches for a league
 app.get('/live', async (req, res) => {
@@ -518,8 +518,8 @@ app.get('/live', async (req, res) => {
   } catch (err) {
     log('ERROR', 'LIVE', 'Live fetch failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch live matches');
-  }
-}
+  });
+});
 
 // Aggregate news feeds (BBC + ESPN + Guardian recommended)
 app.get('/news', async (req, res) => {
@@ -534,8 +534,8 @@ app.get('/news', async (req, res) => {
   } catch (err) {
     log('ERROR', 'RSS', 'News aggregation failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch news');
-  }
-}
+  });
+});
 
 // Football-data CSV endpoint
 app.get('/fixtures', async (req, res) => {
@@ -549,8 +549,8 @@ app.get('/fixtures', async (req, res) => {
   } catch (err) {
     log('ERROR', 'FOOTBALLDATA', 'Fixtures fetch failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch fixtures');
-  }
-}
+  });
+});
 
 // Highlights endpoint via ScoreBat
 app.get('/highlights', async (req, res) => {
@@ -560,8 +560,8 @@ app.get('/highlights', async (req, res) => {
   } catch (err) {
     log('ERROR', 'SCOREBAT', 'Highlights fetch failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch highlights');
-  }
-}
+  });
+});
 
 // Standings normalization endpoint: combine OpenLigaDB + football-data
 app.get('/standings', async (req, res) => {
@@ -570,10 +570,10 @@ app.get('/standings', async (req, res) => {
     const season = req.query.season || new Date().getFullYear();
     // Try OpenLigaDB first
     let openData = [];
-    try { openData = await openLiga.getMatchData(league, season, 1).catch(()=>[]); } catch(e) { openData = []; }
+    try { openData = await openLiga.getMatchData(league, season, 1).catch(()=>[]); } catch(e) { openData = []; });
     // Try football-data as fallback for fixtures/standings
     let fdData = [];
-    try { const fdRes = await footballData.fixturesFromCsv('E0', '2324').catch(()=>null); if (fdRes) fdData = fdRes.fixtures || []; } catch(e) { fdData = []; }
+    try { const fdRes = await footballData.fixturesFromCsv('E0', '2324').catch(()=>null); if (fdRes) fdData = fdRes.fixtures || []; } catch(e) { fdData = []; });
 
     // Normalize some matches and pick best
     const normalized = [];
@@ -585,8 +585,8 @@ app.get('/standings', async (req, res) => {
   } catch (err) {
     log('ERROR', 'STANDINGS', 'Standings failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch standings');
-  }
-}
+  });
+});
 
 // Admin queue status (safe: no secrets). Shows Redis queue lengths and worker heartbeat.
 app.get("/admin/queue", async (req, res) => {
@@ -605,8 +605,8 @@ app.get("/admin/queue", async (req, res) => {
   } catch (err) {
     log("ERROR", "ADMIN", "Failed to read queue status", { err: err.message });
     return res.status(500).json(formatResponse(false, null, "Failed to read queue status");
-  }
-}
+  });
+});
 
 // Admin: fetch Telegram getWebhookInfo (uses server-side token, no token exposure)
 app.get("/admin/webhook-info", async (req, res) => {
@@ -618,8 +618,8 @@ app.get("/admin/webhook-info", async (req, res) => {
   } catch (err) {
     log("ERROR", "TELEGRAM", "getWebhookInfo failed", { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, "Failed to fetch webhook info");
-  }
-}
+  });
+});
 
 // Admin AI health: reports which AI integrations are enabled and last active provider
 app.get("/admin/ai-health", async (req, res) => {
@@ -641,8 +641,8 @@ app.get("/admin/ai-health", async (req, res) => {
   } catch (err) {
     log("ERROR", "ADMIN", "AI health check failed", { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, "AI health check failed");
-  }
-}
+  });
+});
 
 // Admin-only raw Gemini debug endpoint - test Gemini API directly and log full response
 app.post("/admin/gemini-debug", authenticateAdmin, async (req, res) => {
@@ -652,7 +652,7 @@ app.post("/admin/gemini-debug", authenticateAdmin, async (req, res) => {
     
     if (!apiKey) {
       return res.status(400).json(formatResponse(false, null, "GEMINI_API_KEY not set in environment");
-    }
+    });
 
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -661,7 +661,7 @@ app.post("/admin/gemini-debug", authenticateAdmin, async (req, res) => {
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
-}
+});
 
     const text = result.response?.text?.() || "";
     const status = result.response?.candidates?.[0]?.finishReason || "unknown";
@@ -677,8 +677,8 @@ app.post("/admin/gemini-debug", authenticateAdmin, async (req, res) => {
   } catch (err) {
     log('ERROR', 'GEMINI-DEBUG', 'Raw Gemini test failed', { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, { error: err?.message || String(err) }, 'Gemini debug failed');
-  }
-}
+  });
+});
 
 // Admin-only AI test endpoint - runs a short prompt through the composite chain and returns provider+response
 app.post("/admin/ai-test", authenticateAdmin, async (req, res) => {
@@ -705,8 +705,8 @@ app.post("/admin/ai-test", authenticateAdmin, async (req, res) => {
         return res.json(formatResponse(true, { provider: 'gemini', model: null, response: out }, 'AI test');
       } catch (err) {
         log('WARN', 'AI-TEST', 'Gemini test failed, falling back', { err: err?.message || String(err) });
-      }
-    }
+      });
+    });
 
     // Try Azure
     if (azureS && azureS.isHealthy()) {
@@ -715,8 +715,8 @@ app.post("/admin/ai-test", authenticateAdmin, async (req, res) => {
         return res.json(formatResponse(true, { provider: 'azure', model: azureS.lastUsed || null, response: out }, 'AI test');
       } catch (err) {
         log('WARN', 'AI-TEST', 'Azure test failed, falling back', { err: err?.message || String(err) });
-      }
-    }
+      });
+    });
 
     // Try HuggingFace
     if (hf && hf.isHealthy()) {
@@ -725,8 +725,8 @@ app.post("/admin/ai-test", authenticateAdmin, async (req, res) => {
         return res.json(formatResponse(true, { provider: 'huggingface', model: hf.lastUsed || null, response: out }, 'AI test');
       } catch (err) {
         log('WARN', 'AI-TEST', 'HuggingFace test failed, falling back', { err: err?.message || String(err) });
-      }
-    }
+      });
+    });
 
     // Local fallback
     const out = await local.chat(prompt);
@@ -734,19 +734,19 @@ app.post("/admin/ai-test", authenticateAdmin, async (req, res) => {
   } catch (err) {
     log('ERROR', 'AI-TEST', 'AI test failed', { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, 'AI test failed');
-  }
-}
+  });
+});
 
 app.get("/dashboard", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { brand: BETRIX.brand, menu: BETRIX.menu?.main, stats: { totalUsers: 50000, activePredictions: 1234, uptime: process.uptime() } });
-}
+});
 
 // Admin endpoints
 app.get("/admin", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
   const raw = await redis.lrange(LOG_STREAM_KEY, 0, 19).catch(() => []);
   const logs = raw.map(r => { try { return JSON.parse(r); } catch { return null; } }).filter(Boolean);
   res.json(formatResponse(true, { menus: BETRIX.menu?.admin, recentLogs: logs }, "Admin overview");
-}
+});
 
 // Admin: mapping misses summary (past N days)
 app.get("/admin/mapping-misses", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
@@ -757,8 +757,8 @@ app.get("/admin/mapping-misses", authenticateAdmin, tierBasedRateLimiter, async 
   } catch (err) {
     log("ERROR", "ADMIN", "mapping-misses failed", { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, "Failed to fetch mapping misses");
-  }
-}
+  });
+});
 
 // Admin: provider health dashboard (no auth required, read-only diagnostics)
 app.get("/admin/provider-health", async (req, res) => {
@@ -786,16 +786,16 @@ app.get("/admin/provider-health", async (req, res) => {
       console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:786', secretFingerprint);
     } catch (e) {
       // ignore logging errors
-    }
+    });
         if (val) {
           const parsed = JSON.parse(val);
           const provider = key.replace(prefix, '');
           health[provider] = { ...parsed, lastCheck: new Date(parsed.ts).toISOString() };
-        }
+        });
       } catch (e) {
         // Skip malformed entries
-      }
-    }
+      });
+    });
 
     const summary = {
       totalProviders: keys.length,
@@ -809,8 +809,8 @@ app.get("/admin/provider-health", async (req, res) => {
   } catch (err) {
     log("ERROR", "ADMIN", "provider-health failed", { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, "Failed to fetch provider health");
-  }
-}
+  });
+});
 
 // Admin: safe-scan and attempt to repair missing mappings (admin-run only)
 app.post("/admin/safe-scan", authenticateAdmin, tierBasedRateLimiter, express.json(), async (req, res) => {
@@ -822,8 +822,8 @@ app.post("/admin/safe-scan", authenticateAdmin, tierBasedRateLimiter, express.js
   } catch (err) {
     log("ERROR", "ADMIN", "safe-scan failed", { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, "Safe-scan failed");
-  }
-}
+  });
+});
 
 app.post("/admin/settings", authenticateAdmin, upload.single("logo"), async (req, res) => {
   try {
@@ -834,36 +834,36 @@ app.post("/admin/settings", authenticateAdmin, upload.single("logo"), async (req
   } catch (err) {
     log("ERROR", "ADMIN", "Settings update failed", { err: err.message });
     res.status(500).json(formatResponse(false, null, "Failed to update settings");
-  }
-}
+  });
+});
 
 // Predictions / odds / analytics scaffolding
 app.get("/predictions", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { predictions: [{ match: "Barcelona vs Real Madrid", pred: "Barcelona Win", conf: "87%", odds: 1.85 }], accuracy: 97.2 });
-}
+});
 
 app.get("/odds", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { odds: [{ league: "EPL", match: "Man United vs Liverpool", home: 2.45, draw: 3.20, away: 2.80 }], updated: new Date().toISOString() });
-}
+});
 
 app.get("/leaderboard", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { leaderboard: [{ rank: 1, name: "ProBetter", points: 15450 }], yourRank: 247 });
-}
+});
 
 app.get("/analytics", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { dailyActiveUsers: 12340, totalPredictions: 1234567 });
-}
+});
 
 // User routes
 app.get("/user/:userId/stats", tierBasedRateLimiter, (req, res) => {
   const userId = req.params.userId;
   const bets = 156, wins = 95;
   res.json(formatResponse(true, { userId, totalBets: bets, wins, losses: bets - wins, winRate: `${((wins / bets) * 100).toFixed(1)}%` });
-}
+});
 
 app.get("/user/:userId/referrals", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { userId: req.params.userId, totalReferrals: 14, earnings: 8400 });
-}
+});
 
 // Audit & pricing
 app.get("/audit", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
@@ -874,8 +874,8 @@ app.get("/audit", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
   } catch (err) {
     log("ERROR", "AUDIT", "Fetch failed", { err: err.message });
     res.status(500).json(formatResponse(false, null, "Failed to fetch audit logs");
-  }
-}
+  });
+});
 
 app.get("/pricing", (req, res) => res.json(formatResponse(true, { tiers: BETRIX.pricing }));
 
@@ -909,7 +909,7 @@ app.get("/monitor", async (req, res) => {
         for (const t of types) {
           const f = await redis.get(`prefetch:failures:${t}`).catch(() => null);
           failures[t] = f ? Number(f) : 0;
-        }
+        });
         return failures;
       })(),
       (async () => {
@@ -918,7 +918,7 @@ app.get("/monitor", async (req, res) => {
         for (const t of types) {
           const u = await redis.get(`prefetch:last:${t}`).catch(() => null);
           updates[t] = u ? Number(u) : null;
-        }
+        });
         return updates;
       })()
     ]);
@@ -943,7 +943,7 @@ app.get("/monitor", async (req, res) => {
         websocket: {
           connected_clients: activeConnections,
           subscribed_types: ['prefetch:updates', 'prefetch:error']
-        }
+        });
       },
       prefetch: {
         failures: prefetchFailures,
@@ -969,8 +969,8 @@ app.get("/monitor", async (req, res) => {
   } catch (err) {
     log('ERROR', 'MONITOR', 'Dashboard failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Monitor dashboard error');
-  }
-}
+  });
+});
 
 // ============================================================================
 // TELEGRAM WEBHOOK (secure header validation)
@@ -979,7 +979,7 @@ const validateTelegramRequest = (req, pathToken) => {
   if (TELEGRAM_WEBHOOK_SECRET) {
     const header = req.headers['x-telegram-bot-api-secret-token'];
     if (!header || header !== TELEGRAM_WEBHOOK_SECRET) return { ok: false, reason: 'invalid_secret_header' };
-  }
+  });
   if (pathToken && TELEGRAM_TOKEN && pathToken !== TELEGRAM_TOKEN) return { ok: false, reason: 'invalid_path_token' };
   return { ok: true };
 };
@@ -992,7 +992,7 @@ app.post("/webhook/telegram/:token?", tierBasedRateLimiter, express.json({ limit
   if (!check.ok) {
     log("WARN", "WEBHOOK", "Invalid webhook request", { reason: check.reason, forwarded: req.headers["x-forwarded-for"] || req.ip });
     return res.status(403).send("Forbidden");
-  }
+  });
 
   try {
     const payload = req.body;
@@ -1002,8 +1002,8 @@ app.post("/webhook/telegram/:token?", tierBasedRateLimiter, express.json({ limit
   } catch (err) {
     log("ERROR", "WEBHOOK", "Queue failed", { err: err.message });
     return res.status(500).send("Internal Server Error");
-  }
-}
+  });
+});
 
 // ============================================================================
 // PAYMENTS (scaffold)
@@ -1011,7 +1011,7 @@ app.post("/webhook/telegram/:token?", tierBasedRateLimiter, express.json({ limit
 app.get("/paypal/checkout", tierBasedRateLimiter, (req, res) => {
   const html = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${BETRIX.name} Payments</title><style>body{font-family:Segoe UI,Arial;background:#f6f8fb;padding:40px} .container{max-width:600px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.08)}</style></head><body><div class="container"><h1>${BETRIX.name} Payments</h1><p>Redirecting to payment provider...</p></div></body></html>`;
   res.send(html);
-}
+});
 
 // ============================================================================
 // PAYMENT WEBHOOKS
@@ -1029,8 +1029,8 @@ app.post(
     } catch (err) {
       log("ERROR", "PAYMENTS", "M-Pesa webhook failed", { err: err?.message || String(err) });
       return res.status(500).json(formatResponse(false, null, "M-Pesa webhook error");
-    }
-  }
+    });
+  });
 );
 
 // Safaricom Till confirmation
@@ -1046,8 +1046,8 @@ app.post(
     } catch (err) {
       log("ERROR", "PAYMENTS", "Till webhook failed", { err: err?.message || String(err) });
       return res.status(500).json(formatResponse(false, null, "Till webhook error");
-    }
-  }
+    });
+  });
 );
 
 // PayPal webhook
@@ -1063,8 +1063,8 @@ app.post(
     } catch (err) {
       log("ERROR", "PAYMENTS", "PayPal webhook failed", { err: err?.message || String(err) });
       return res.status(500).json(formatResponse(false, null, "PayPal webhook error");
-    }
-  }
+    });
+  });
 );
 
 // Binance webhook
@@ -1080,8 +1080,8 @@ app.post(
     } catch (err) {
       log("ERROR", "PAYMENTS", "Binance webhook failed", { err: err?.message || String(err) });
       return res.status(500).json(formatResponse(false, null, "Binance webhook error");
-    }
-  }
+    });
+  });
 );
 
 // Simple health check for Render / uptime probes
@@ -1092,8 +1092,8 @@ function verifySignature(req) {
   const headerKeys = ['x-lipana-signature', 'x-signature', 'x-lipana-hmac', 'signature', 'x-hook-signature'];
   let signature = null;
   for (const k of headerKeys) {
-    if (req.headers[k]) { signature = String(req.headers[k]); break; }
-  }
+    if (req.headers[k]) { signature = String(req.headers[k]); break; });
+  });
   // Normalize header value if present (but continue so we can log even when missing)
   signature = signature ? signature.trim() : '';
   if (signature.toLowerCase().startsWith('sha256=')) signature = signature.slice(7).trim();
@@ -1113,7 +1113,7 @@ function verifySignature(req) {
     console.log('[verifySignature] Incoming signature(header)= - app.js:1113', incomingPreview);
   } catch (e) {
     // ignore logging errors
-  }
+  });
 
   // Log raw body preview and headers to help identify byte-level differences
   try {
@@ -1128,12 +1128,12 @@ function verifySignature(req) {
     console.log('[verifySignature] parsed(JSON.stringify) preview= - app.js:1108', parsedPreview);
   } catch (e) {
     // ignore logging errors
-  }
+  });
 
   if (!lipanaSecret) {
-    try { console.log('[verifySignature] LIPANA_SECRET is missing or empty - app.js:1119'); } catch (e) {}
+    try { console.log('[verifySignature] LIPANA_SECRET is missing or empty - app.js:1119'); } catch (e) {});
     return false;
-  }
+  });
 
   const expectedHex = crypto.createHmac('sha256', lipanaSecret).update(raw).digest('hex');
   const expectedBase64 = crypto.createHmac('sha256', lipanaSecret).update(raw).digest('base64');
@@ -1142,10 +1142,10 @@ function verifySignature(req) {
   try {
     console.log('[verifySignature] Computed expectedHex(first16)= - app.js:1128', expectedHex.slice(0,16), '...');
     console.log('[verifySignature] Computed expectedBase64(first16)= - app.js:1129', expectedBase64.slice(0,16), '...');
-  } catch (e) {}
+  } catch (e) {});
 
   const safeCompare = (aBuf, bBuf) => {
-    try { if (!Buffer.isBuffer(aBuf) || !Buffer.isBuffer(bBuf)) return false; if (aBuf.length !== bBuf.length) return false; return crypto.timingSafeEqual(aBuf, bBuf); } catch (e) { return false; }
+    try { if (!Buffer.isBuffer(aBuf) || !Buffer.isBuffer(bBuf)) return false; if (aBuf.length !== bBuf.length) return false; return crypto.timingSafeEqual(aBuf, bBuf); } catch (e) { return false; });
   };
 
   // Try hex comparison
@@ -1155,7 +1155,7 @@ function verifySignature(req) {
     if (safeCompare(sigHexBuf, expectedHexBuf)) return true;
   } catch (e) {
     // not hex
-  }
+  });
 
   // Try base64 comparison
   try {
@@ -1164,10 +1164,10 @@ function verifySignature(req) {
     if (safeCompare(sigB64Buf, expectedB64Buf)) return true;
   } catch (e) {
     // not base64
-  }
+  });
 
   return false;
-}
+});
 
 // Capture raw body buffer for HMAC verification (use Buffer, not string)
 app.post('/webhook/mpesa', express.json({ limit: '1mb', verify: (req, res, buf, encoding) => { req.rawBody = buf; } }), async (req, res) => {
@@ -1177,7 +1177,7 @@ app.post('/webhook/mpesa', express.json({ limit: '1mb', verify: (req, res, buf, 
   if (!verifySignature(req)) {
     log('WARN', 'WEBHOOK', 'Invalid Lipana signature', { ip: req.ip });
     return res.status(401).send('Unauthorized');
-  }
+  });
   try {
     log('INFO', 'WEBHOOK', 'Webhook received', { body: req.body });
     // insert into webhooks table (raw_payload stored as jsonb)
@@ -1198,8 +1198,8 @@ app.post('/webhook/mpesa', express.json({ limit: '1mb', verify: (req, res, buf, 
   } catch (err) {
     log('ERROR', 'WEBHOOK', 'DB insert error', { err: err?.message || String(err) });
     return res.status(500).send('DB Error');
-  }
-}
+  });
+});
 
 // Temporary debug endpoint: echo masked headers + small raw-body preview
 app.post('/webhook/debug-echo', express.json({ limit: '1mb', verify: (req, _res, buf) => { req.rawBody = buf; } }), (req, res) => {
@@ -1209,14 +1209,14 @@ app.post('/webhook/debug-echo', express.json({ limit: '1mb', verify: (req, _res,
       if (k.startsWith('x-') || k.includes('signature') || k.includes('lipana')) {
         const v = String(req.headers[k] || '');
         headers[k] = v ? `${v.slice(0,12)}...len:${v.length}` : '(empty)';
-      }
-}
+      });
+});
     const rawPreview = (req.rawBody && req.rawBody.slice(0, 200).toString('utf8')) || JSON.stringify(req.body || {});
     return res.status(200).json({ ok: true, path: req.path, headerPreview: headers, rawPreview });
   } catch (e) {
     return res.status(500).json({ ok: false, err: String(e) });
-  }
-}
+  });
+});
 
 // Manual verify (user clicked "I have paid") - orderId in URL
 app.post(
@@ -1232,8 +1232,8 @@ app.post(
     } catch (err) {
       log("ERROR", "PAYMENTS", "Manual verify failed", { err: err?.message || String(err) });
       return res.status(500).json(formatResponse(false, null, "Manual verify error");
-    }
-  }
+    });
+  });
 );
 
 // ============================================================================
@@ -1245,7 +1245,7 @@ app.use((err, req, res, next) => {
   log("ERROR", "EXPRESS", "Unhandled error", { message: err?.message, stack: err?.stack });
   if (res.headersSent) return next(err);
   res.status(500).json(formatResponse(false, null, "Internal server error");
-}
+});
 
 // ============================================================================
 // GRACEFUL SHUTDOWN
@@ -1264,7 +1264,7 @@ const shutdown = async () => {
     log("ERROR", "SHUTDOWN", "Shutdown error", { err: err.message });
   } finally {
     process.exit(0);
-  }
+  });
 };
 
 process.on("SIGTERM", shutdown);
@@ -1280,7 +1280,7 @@ const start = async () => {
       const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
       await redis.set("admin:password", hash);
       log("INFO", "INIT", "Admin password initialized");
-    }
+    });
 
     // Initialize startup data feed (prefetch initializer)
     try {
@@ -1295,23 +1295,23 @@ const start = async () => {
             ready: status.ready,
             sports: status.sports,
             items: status.totalItems
-}
+});
         })
         .catch(err => {
           log("WARN", "STARTUP", "Startup initialization failed, using fallback providers", { 
             error: err?.message || String(err) 
-}
-}
+});
+});
       
       // Store initializer in app locals for access in handlers
       app.locals.startupInit = startupInit;
     } catch (err) {
       log("WARN", "STARTUP", "Could not load startup initializer", { error: err?.message || String(err) });
-    }
+    });
 
     server.listen(port, "0.0.0.0", () => {
       log("INFO", "SERVER", "BETRIX Server started", { port, environment: NODE_ENV, version: BETRIX.version });
-}
+});
     // Register webhook if configured
     try {
       if (TELEGRAM_TOKEN && process.env.TELEGRAM_WEBHOOK_URL) {
@@ -1322,14 +1322,14 @@ const start = async () => {
         log("INFO", "TELEGRAM", "setWebhook response", { resp });
       } else {
         log("INFO", "TELEGRAM", "Webhook not configured - missing TELEGRAM_TOKEN or TELEGRAM_WEBHOOK_URL");
-      }
+      });
     } catch (err) {
       log("ERROR", "TELEGRAM", "Failed to set webhook", { err: err?.message || String(err) });
-    }
+    });
   } catch (err) {
     log("ERROR", "INIT", "Startup failed", { err: err.message });
     process.exit(1);
-  }
+  });
 };
 
 start();
@@ -1344,8 +1344,8 @@ export function registerDataExposureAPI(sportsAggregator) {
     log("INFO", "DATA_EXPOSURE", "Data exposure API registered successfully", { endpoints: ['/api/data/summary', '/api/data/live', '/api/data/fixtures', '/api/data/match', '/api/data/standings', '/api/data/leagues', '/api/data/cache-info', '/api/data/cache-cleanup', '/api/data/export', '/api/data/schema'] });
   } catch (err) {
     log("ERROR", "DATA_EXPOSURE", "Failed to register data exposure API", { error: err?.message || String(err) });
-  }
-}
+  });
+});
 
 // Export core app pieces and initialized data services for other modules
 export { app, server, redis, wss, openLiga, rssAggregator, footballData, scorebat, scrapers };
