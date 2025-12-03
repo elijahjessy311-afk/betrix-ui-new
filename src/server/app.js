@@ -52,7 +52,7 @@ function fallbackCreateServer() {
   return http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
-  });
+}
 }
 
 let exported;

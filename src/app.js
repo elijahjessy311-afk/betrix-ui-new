@@ -111,13 +111,13 @@ app.post('/__debug__webhook_echo', express.json({ limit: '1mb', verify: (req, _r
         const v = String(req.headers[k] || '');
         headers[k] = v ? `${v.slice(0,12)}...len:${v.length}` : '(empty)';
       }
-    });
+}
     const rawPreview = (req.rawBody && req.rawBody.slice(0, 200).toString('utf8')) || JSON.stringify(req.body || {});
     return res.status(200).json({ ok: true, path: req.path, headerPreview: headers, rawPreview });
   } catch (e) {
     return res.status(500).json({ ok: false, err: String(e) });
   }
-});
+}
 
 const server = createServer(app);
 const redis = getRedis();
@@ -138,7 +138,7 @@ const sportsAggregator = new SportsAggregator(redis, {
   scorebat,
   rss: rssAggregator,
   openLiga
-});
+}
 
 // ============================================================================
 // LOGGING
@@ -192,16 +192,16 @@ wss.on("connection", (ws, req) => {
       log("ERROR", "WEBSOCKET", "Invalid WS message", { clientId, err: err.message });
       safeSend(ws, { type: "error", error: "Invalid message format" });
     }
-  });
+}
 
   ws.on("close", () => {
     activeConnections.delete(ws);
     clientSubscriptions.delete(ws);
     log("INFO", "WEBSOCKET", "Client disconnected", { clientId, remaining: activeConnections.size });
-  });
+}
 
   ws.on("error", err => log("ERROR", "WEBSOCKET", "WS error", { clientId, err: err.message }));
-});
+}
 
 const handleWebSocketMessage = (ws, data, clientId) => {
   if (!data || typeof data.type !== "string") { safeSend(ws, { type: "error", error: "Missing message type" }); return; }
@@ -261,7 +261,7 @@ try {
     } catch (e) {
       console.error('broadcast prefetch failed - app.js:262', e);
     }
-  });
+}
 } catch (e) {
   console.error('prefetch subscriber failed to start - app.js:266', e);
 }
@@ -280,14 +280,14 @@ app.use(helmet({
     }
   },
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
-});
+}
 
 app.use(cors({
   origin: ALLOWED_ORIGINS === "*" ? "*" : ALLOWED_ORIGINS.split(",").map(s => s.trim()),
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
   optionsSuccessStatus: 200
-});
+}
 
 app.use(compression();
 app.use(morgan(isProd ? "combined" : "dev");
@@ -308,13 +308,13 @@ app.use((req, res, next) => {
     res.setHeader("Expires", "0");
   }
   next();
-});
+}
 
 app.use((req, res, next) => {
   res.setHeader("X-Powered-By", `${BETRIX.name}/${BETRIX.version}`);
   res.setHeader("X-Content-Type-Options", "nosniff");
   next();
-});
+}
 
 // ============================================================================
 // RATE LIMITING (proxy-aware key generator using req.ip)
@@ -336,7 +336,7 @@ const baseLimiter = (windowMs, max, message) =>
         return req.ip || (req.headers["x-forwarded-for"] || "").split(",")[0]?.trim() || "unknown";
       }
     }
-  });
+}
 
 const freeLimiter = baseLimiter(60 * 1000, 30, "Rate limit exceeded. Upgrade for higher limits.");
 const memberLimiter = baseLimiter(60 * 1000, 60, "Rate limit exceeded for member tier.");
@@ -383,13 +383,13 @@ app.use('/webhook', (req, _res, next) => {
       const v = String(req.headers[k] || '').trim();
       // Mask the value but show prefix for debugging (first 8 chars)
       preview[k] = v ? `${v.slice(0,8)}...len:${v.length}` : '(empty)';
-    });
+}
     console.log('[WEBHOOKDEBUG] path= - app.js:387', req.path, 'headerPreview=', preview);
   } catch (e) {
     // ignore logging errors
   }
   return next();
-});
+}
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -402,7 +402,7 @@ const upload = multer({
     if (ok) { log("INFO", "UPLOAD", "Accepted file", { filename: file.originalname, mimetype: file.mimetype }); cb(null, true); }
     else { log("WARN", "UPLOAD", "Rejected file", { filename: file.originalname, mimetype: file.mimetype }); cb(new Error("Invalid file type"); }
   }
-});
+}
 
 // ============================================================================
 // AUTH (Admin Basic + bcrypt + Redis)
@@ -465,12 +465,12 @@ app.get("/", (req, res) => {
     uptime: process.uptime(),
     endpoints: { dashboard: "/dashboard", monitor: "/monitor.html", api: "/api/v1", admin: "/admin", webhooks: "/webhook", payments: "/paypal", health: "/health", metrics: "/metrics" },
     menu: BETRIX.menu?.main || []
-  });
-});
+}
+}
 
 app.get("/health", (req, res) => {
   res.json(formatResponse(true, { status: "healthy", uptime: process.uptime(), redis: true, version: BETRIX.version }, "All systems operational");
-});
+}
 
 app.get("/metrics", async (req, res) => {
   try {
@@ -479,7 +479,7 @@ app.get("/metrics", async (req, res) => {
   } catch (err) {
     res.status(500).json(formatResponse(false, null, "Metrics fetch failed");
   }
-});
+}
 
 // Simple endpoints for free sources
 app.get('/openligadb/leagues', async (req, res) => {
@@ -490,7 +490,7 @@ app.get('/openligadb/leagues', async (req, res) => {
     log('ERROR', 'OPENLIGA', 'Failed to fetch leagues', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch leagues');
   }
-});
+}
 
 app.get('/openligadb/matchdata', async (req, res) => {
   try {
@@ -504,7 +504,7 @@ app.get('/openligadb/matchdata', async (req, res) => {
     log('ERROR', 'OPENLIGA', 'Matchdata fetch failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch match data');
   }
-});
+}
 
 // Friendly live wrapper: best-effort recent matches for a league
 app.get('/live', async (req, res) => {
@@ -519,7 +519,7 @@ app.get('/live', async (req, res) => {
     log('ERROR', 'LIVE', 'Live fetch failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch live matches');
   }
-});
+}
 
 // Aggregate news feeds (BBC + ESPN + Guardian recommended)
 app.get('/news', async (req, res) => {
@@ -535,7 +535,7 @@ app.get('/news', async (req, res) => {
     log('ERROR', 'RSS', 'News aggregation failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch news');
   }
-});
+}
 
 // Football-data CSV endpoint
 app.get('/fixtures', async (req, res) => {
@@ -550,7 +550,7 @@ app.get('/fixtures', async (req, res) => {
     log('ERROR', 'FOOTBALLDATA', 'Fixtures fetch failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch fixtures');
   }
-});
+}
 
 // Highlights endpoint via ScoreBat
 app.get('/highlights', async (req, res) => {
@@ -561,7 +561,7 @@ app.get('/highlights', async (req, res) => {
     log('ERROR', 'SCOREBAT', 'Highlights fetch failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch highlights');
   }
-});
+}
 
 // Standings normalization endpoint: combine OpenLigaDB + football-data
 app.get('/standings', async (req, res) => {
@@ -586,7 +586,7 @@ app.get('/standings', async (req, res) => {
     log('ERROR', 'STANDINGS', 'Standings failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Failed to fetch standings');
   }
-});
+}
 
 // Admin queue status (safe: no secrets). Shows Redis queue lengths and worker heartbeat.
 app.get("/admin/queue", async (req, res) => {
@@ -606,7 +606,7 @@ app.get("/admin/queue", async (req, res) => {
     log("ERROR", "ADMIN", "Failed to read queue status", { err: err.message });
     return res.status(500).json(formatResponse(false, null, "Failed to read queue status");
   }
-});
+}
 
 // Admin: fetch Telegram getWebhookInfo (uses server-side token, no token exposure)
 app.get("/admin/webhook-info", async (req, res) => {
@@ -619,7 +619,7 @@ app.get("/admin/webhook-info", async (req, res) => {
     log("ERROR", "TELEGRAM", "getWebhookInfo failed", { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, "Failed to fetch webhook info");
   }
-});
+}
 
 // Admin AI health: reports which AI integrations are enabled and last active provider
 app.get("/admin/ai-health", async (req, res) => {
@@ -642,7 +642,7 @@ app.get("/admin/ai-health", async (req, res) => {
     log("ERROR", "ADMIN", "AI health check failed", { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, "AI health check failed");
   }
-});
+}
 
 // Admin-only raw Gemini debug endpoint - test Gemini API directly and log full response
 app.post("/admin/gemini-debug", authenticateAdmin, async (req, res) => {
@@ -661,7 +661,7 @@ app.post("/admin/gemini-debug", authenticateAdmin, async (req, res) => {
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
-    });
+}
 
     const text = result.response?.text?.() || "";
     const status = result.response?.candidates?.[0]?.finishReason || "unknown";
@@ -678,7 +678,7 @@ app.post("/admin/gemini-debug", authenticateAdmin, async (req, res) => {
     log('ERROR', 'GEMINI-DEBUG', 'Raw Gemini test failed', { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, { error: err?.message || String(err) }, 'Gemini debug failed');
   }
-});
+}
 
 // Admin-only AI test endpoint - runs a short prompt through the composite chain and returns provider+response
 app.post("/admin/ai-test", authenticateAdmin, async (req, res) => {
@@ -735,18 +735,18 @@ app.post("/admin/ai-test", authenticateAdmin, async (req, res) => {
     log('ERROR', 'AI-TEST', 'AI test failed', { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, 'AI test failed');
   }
-});
+}
 
 app.get("/dashboard", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { brand: BETRIX.brand, menu: BETRIX.menu?.main, stats: { totalUsers: 50000, activePredictions: 1234, uptime: process.uptime() } });
-});
+}
 
 // Admin endpoints
 app.get("/admin", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
   const raw = await redis.lrange(LOG_STREAM_KEY, 0, 19).catch(() => []);
   const logs = raw.map(r => { try { return JSON.parse(r); } catch { return null; } }).filter(Boolean);
   res.json(formatResponse(true, { menus: BETRIX.menu?.admin, recentLogs: logs }, "Admin overview");
-});
+}
 
 // Admin: mapping misses summary (past N days)
 app.get("/admin/mapping-misses", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
@@ -758,7 +758,7 @@ app.get("/admin/mapping-misses", authenticateAdmin, tierBasedRateLimiter, async 
     log("ERROR", "ADMIN", "mapping-misses failed", { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, "Failed to fetch mapping misses");
   }
-});
+}
 
 // Admin: provider health dashboard (no auth required, read-only diagnostics)
 app.get("/admin/provider-health", async (req, res) => {
@@ -810,7 +810,7 @@ app.get("/admin/provider-health", async (req, res) => {
     log("ERROR", "ADMIN", "provider-health failed", { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, "Failed to fetch provider health");
   }
-});
+}
 
 // Admin: safe-scan and attempt to repair missing mappings (admin-run only)
 app.post("/admin/safe-scan", authenticateAdmin, tierBasedRateLimiter, express.json(), async (req, res) => {
@@ -823,7 +823,7 @@ app.post("/admin/safe-scan", authenticateAdmin, tierBasedRateLimiter, express.js
     log("ERROR", "ADMIN", "safe-scan failed", { err: err?.message || String(err) });
     return res.status(500).json(formatResponse(false, null, "Safe-scan failed");
   }
-});
+}
 
 app.post("/admin/settings", authenticateAdmin, upload.single("logo"), async (req, res) => {
   try {
@@ -835,35 +835,35 @@ app.post("/admin/settings", authenticateAdmin, upload.single("logo"), async (req
     log("ERROR", "ADMIN", "Settings update failed", { err: err.message });
     res.status(500).json(formatResponse(false, null, "Failed to update settings");
   }
-});
+}
 
 // Predictions / odds / analytics scaffolding
 app.get("/predictions", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { predictions: [{ match: "Barcelona vs Real Madrid", pred: "Barcelona Win", conf: "87%", odds: 1.85 }], accuracy: 97.2 });
-});
+}
 
 app.get("/odds", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { odds: [{ league: "EPL", match: "Man United vs Liverpool", home: 2.45, draw: 3.20, away: 2.80 }], updated: new Date().toISOString() });
-});
+}
 
 app.get("/leaderboard", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { leaderboard: [{ rank: 1, name: "ProBetter", points: 15450 }], yourRank: 247 });
-});
+}
 
 app.get("/analytics", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { dailyActiveUsers: 12340, totalPredictions: 1234567 });
-});
+}
 
 // User routes
 app.get("/user/:userId/stats", tierBasedRateLimiter, (req, res) => {
   const userId = req.params.userId;
   const bets = 156, wins = 95;
   res.json(formatResponse(true, { userId, totalBets: bets, wins, losses: bets - wins, winRate: `${((wins / bets) * 100).toFixed(1)}%` });
-});
+}
 
 app.get("/user/:userId/referrals", tierBasedRateLimiter, (req, res) => {
   res.json(formatResponse(true, { userId: req.params.userId, totalReferrals: 14, earnings: 8400 });
-});
+}
 
 // Audit & pricing
 app.get("/audit", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
@@ -875,7 +875,7 @@ app.get("/audit", authenticateAdmin, tierBasedRateLimiter, async (req, res) => {
     log("ERROR", "AUDIT", "Fetch failed", { err: err.message });
     res.status(500).json(formatResponse(false, null, "Failed to fetch audit logs");
   }
-});
+}
 
 app.get("/pricing", (req, res) => res.json(formatResponse(true, { tiers: BETRIX.pricing }));
 
@@ -970,7 +970,7 @@ app.get("/monitor", async (req, res) => {
     log('ERROR', 'MONITOR', 'Dashboard failed', { err: err.message });
     return res.status(500).json(formatResponse(false, null, 'Monitor dashboard error');
   }
-});
+}
 
 // ============================================================================
 // TELEGRAM WEBHOOK (secure header validation)
@@ -1003,7 +1003,7 @@ app.post("/webhook/telegram/:token?", tierBasedRateLimiter, express.json({ limit
     log("ERROR", "WEBHOOK", "Queue failed", { err: err.message });
     return res.status(500).send("Internal Server Error");
   }
-});
+}
 
 // ============================================================================
 // PAYMENTS (scaffold)
@@ -1011,7 +1011,7 @@ app.post("/webhook/telegram/:token?", tierBasedRateLimiter, express.json({ limit
 app.get("/paypal/checkout", tierBasedRateLimiter, (req, res) => {
   const html = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${BETRIX.name} Payments</title><style>body{font-family:Segoe UI,Arial;background:#f6f8fb;padding:40px} .container{max-width:600px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.08)}</style></head><body><div class="container"><h1>${BETRIX.name} Payments</h1><p>Redirecting to payment provider...</p></div></body></html>`;
   res.send(html);
-});
+}
 
 // ============================================================================
 // PAYMENT WEBHOOKS
@@ -1199,7 +1199,7 @@ app.post('/webhook/mpesa', express.json({ limit: '1mb', verify: (req, res, buf, 
     log('ERROR', 'WEBHOOK', 'DB insert error', { err: err?.message || String(err) });
     return res.status(500).send('DB Error');
   }
-});
+}
 
 // Temporary debug endpoint: echo masked headers + small raw-body preview
 app.post('/webhook/debug-echo', express.json({ limit: '1mb', verify: (req, _res, buf) => { req.rawBody = buf; } }), (req, res) => {
@@ -1210,13 +1210,13 @@ app.post('/webhook/debug-echo', express.json({ limit: '1mb', verify: (req, _res,
         const v = String(req.headers[k] || '');
         headers[k] = v ? `${v.slice(0,12)}...len:${v.length}` : '(empty)';
       }
-    });
+}
     const rawPreview = (req.rawBody && req.rawBody.slice(0, 200).toString('utf8')) || JSON.stringify(req.body || {});
     return res.status(200).json({ ok: true, path: req.path, headerPreview: headers, rawPreview });
   } catch (e) {
     return res.status(500).json({ ok: false, err: String(e) });
   }
-});
+}
 
 // Manual verify (user clicked "I have paid") - orderId in URL
 app.post(
@@ -1245,7 +1245,7 @@ app.use((err, req, res, next) => {
   log("ERROR", "EXPRESS", "Unhandled error", { message: err?.message, stack: err?.stack });
   if (res.headersSent) return next(err);
   res.status(500).json(formatResponse(false, null, "Internal server error");
-});
+}
 
 // ============================================================================
 // GRACEFUL SHUTDOWN
@@ -1295,13 +1295,13 @@ const start = async () => {
             ready: status.ready,
             sports: status.sports,
             items: status.totalItems
-          });
+}
         })
         .catch(err => {
           log("WARN", "STARTUP", "Startup initialization failed, using fallback providers", { 
             error: err?.message || String(err) 
-          });
-        });
+}
+}
       
       // Store initializer in app locals for access in handlers
       app.locals.startupInit = startupInit;
@@ -1311,7 +1311,7 @@ const start = async () => {
 
     server.listen(port, "0.0.0.0", () => {
       log("INFO", "SERVER", "BETRIX Server started", { port, environment: NODE_ENV, version: BETRIX.version });
-    });
+}
     // Register webhook if configured
     try {
       if (TELEGRAM_TOKEN && process.env.TELEGRAM_WEBHOOK_URL) {
