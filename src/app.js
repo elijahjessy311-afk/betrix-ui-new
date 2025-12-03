@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import bodyParser from "body-parser";
 import crypto from 'crypto';
 import { Pool } from 'pg';
@@ -1171,6 +1171,9 @@ function verifySignature(req) {
 
 // Capture raw body buffer for HMAC verification (use Buffer, not string)
 app.post('/webhook/mpesa', express.json({ limit: '1mb', verify: (req, res, buf, encoding) => { req.rawBody = buf; } }), async (req, res) => {
+    console.log("[WEBHOOK HEADERS]", req.headers);
+    console.log("[WEBHOOK HEADERS]", req.headers);
+    console.log("[WEBHOOK HEADERS]", req.headers);
   if (!verifySignature(req)) {
     log('WARN', 'WEBHOOK', 'Invalid Lipana signature', { ip: req.ip });
     return res.status(401).send('Unauthorized');
