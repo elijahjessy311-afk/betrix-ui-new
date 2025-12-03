@@ -168,7 +168,7 @@ const activeConnections = new Set();
 const clientSubscriptions = new Map();
 
 const safeSend = (ws, payload) => {
-  try { if (ws && ws.readyState === 1) ws.send(JSON.stringify(payload); } catch {}
+  try { if (ws && ws.readyState === 1) ws.send(JSON.stringify(payload)); } catch {}
 };
 
 const broadcastToAdmins = message => {
