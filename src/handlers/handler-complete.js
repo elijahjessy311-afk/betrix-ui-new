@@ -8,6 +8,7 @@ import { Logger } from '../utils/logger.js';
 import * as completeMenus from './menu-handler-complete.js';
 import { createCustomPaymentOrder } from './payment-router.js';
 import lipana from '../lib/lipana-client.js';
+import { Pool } from 'pg';
 import SportMonksService from '../services/sportmonks-service.js';
 
 const logger = new Logger('HandlerComplete');
@@ -598,6 +599,20 @@ export async function handleCallbackQuery(cq, redis, services) {
             const resp = await lipana.stkPush({ amount, phone: msisdn, tx_ref: order.orderId, reference: order.orderId, callback_url: callback });
             providerCheckout = resp?.raw?.data?.transactionId || resp?.raw?.data?._id || null;
             if (providerCheckout) {
+              // Persist a payments row for reconciliation and audit
+              try {
+                const connStr = process.env.DATABASE_URL || null;
+                if (connStr) {
+                  const pool = new Pool({ connectionString: connStr });
+                  const insertSql = `INSERT INTO payments(tx_ref, user_id, amount, status, metadata, created_at)
+                    VALUES($1,$2,$3,$4,$5, now())`;
+                  const metadata = { provider: 'LIPANA', provider_checkout_id: providerCheckout, orderId: order.orderId };
+                  await pool.query(insertSql, [order.orderId, order.userId, order.totalAmount || amount, 'pending', JSON.stringify(metadata)]);
+                  try { await pool.end(); } catch(e){}
+                }
+              } catch (ee) {
+                logger.warn('Failed to persist payments row for STK push', ee?.message || String(ee));
+              }
               // Store quick lookup mapping so webhook can resolve provider ref -> orderId
               try { await redis.setex(`payment:by_provider_ref:MPESA:${providerCheckout}`, 900, order.orderId); } catch (e) { /* ignore */ }
             }

@@ -102,6 +102,20 @@ export async function handleMpesaCallback(req, redis, bot) {
           await bot.sendMessage(foundData.userId, `✅ *M-Pesa Payment Confirmed*\n\nAmount: KES ${amount}\nReceipt: ${mpesaReceiptNumber}\n\nYour ${subscription.tier} subscription is now active!`, { parse_mode: 'Markdown' });
         }
 
+        // Update payments table if present
+        try {
+          const connStr = process.env.DATABASE_URL || null;
+          if (connStr) {
+            const { Pool } = await import('pg');
+            const pool = new Pool({ connectionString: connStr });
+            const upd = `UPDATE payments SET status = 'success', tx_id = $1, updated_at = now() WHERE (metadata->>'provider_checkout_id') = $2 OR tx_ref = $3`;
+            await pool.query(upd, [mpesaReceiptNumber, mpesaReceiptNumber, orderId]);
+            try { await pool.end(); } catch(e){}
+          }
+        } catch (ee) {
+          logger.warn('Failed to update payments table after MPESA activation', ee?.message || String(ee));
+        }
+
         return { success: true, message: 'Payment processed' };
       } catch (err) {
         logger.error('Error processing M-Pesa callback', err);
