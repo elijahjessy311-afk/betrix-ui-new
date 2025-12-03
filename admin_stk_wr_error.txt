@@ -1,0 +1,22 @@
+
+Version             : 1.1
+Content             : System.Net.Http.DecompressionHandler+BrotliDecompressedContent
+StatusCode          : NotFound
+ReasonPhrase        : Not Found
+Headers             : {[Date, System.String[]], [Connection, System.String[]], [CF-RAY, System.String[]], [Access-Control-Allow-Credentials, System.String[]]…}
+TrailingHeaders     : {}
+RequestMessage      : Method: POST, RequestUri: 'https://betrix-ui.onrender.com/admin/stk', Version: 1.1, Content: System.Net.Http.ByteArrayContent, Headers:
+                      {
+                        Authorization: Basic YWRtaW46YmV0cml4MjAyNCE=
+                        User-Agent: Mozilla/5.0
+                        User-Agent: (Windows NT 10.0; Microsoft Windows 10.0.26100; en-KE)
+                        User-Agent: PowerShell/7.5.4
+                        Accept-Encoding: gzip
+                        Accept-Encoding: deflate
+                        Accept-Encoding: br
+                        Content-Type: application/json
+                        Content-Length: 52
+                      }
+IsSuccessStatusCode : False
+
+

@@ -1,0 +1,57 @@
+{
+  "autoDeploy": "yes",
+  "autoDeployTrigger": "commit",
+  "branch": "main",
+  "createdAt": "2025-11-04T18:16:42.267263Z",
+  "dashboardUrl": "https://dashboard.render.com/web/srv-d4546263jp1c73eiu4n0",
+  "environmentId": "evm-d42mku15pdvs73d7b2g0",
+  "id": "srv-d4546263jp1c73eiu4n0",
+  "name": "betrix-ui",
+  "notifyOnFail": "default",
+  "ownerId": "tea-d42k2bi4d50c739qaf50",
+  "repo": "https://github.com/maryreaky/betrix-ui-replit-",
+  "rootDir": "",
+  "serviceDetails": {
+    "buildPlan": "performance",
+    "cache": {
+      "profile": "no-cache"
+    },
+    "env": "node",
+    "envSpecificDetails": {
+      "buildCommand": "npm install",
+      "startCommand": "node src/app.js"
+    },
+    "healthCheckPath": "/health",
+    "ipAllowList": [
+      {
+        "cidrBlock": "0.0.0.0/0",
+        "description": "everywhere"
+      }
+    ],
+    "maintenanceMode": {
+      "enabled": false,
+      "uri": ""
+    },
+    "numInstances": 1,
+    "openPorts": [
+      {
+        "port": 10000,
+        "protocol": "TCP"
+      }
+    ],
+    "plan": "standard",
+    "previews": {
+      "generation": "off"
+    },
+    "pullRequestPreviewsEnabled": "no",
+    "region": "frankfurt",
+    "runtime": "node",
+    "sshAddress": "srv-d4546263jp1c73eiu4n0@ssh.frankfurt.render.com",
+    "url": "https://betrix-ui.onrender.com"
+  },
+  "slug": "betrix-ui",
+  "suspended": "not_suspended",
+  "suspenders": [],
+  "type": "web_service",
+  "updatedAt": "2025-12-03T13:07:56.628862Z"
+}

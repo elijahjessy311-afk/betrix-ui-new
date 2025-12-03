@@ -1,0 +1,342 @@
+[
+  {
+    "deploy": {
+      "id": "dep-d4o3abq4d50c73a93qd0",
+      "commit": {
+        "id": "9e9496ea8cd21333d2b13f09d552c7fe595ce2e9",
+        "message": "ci: trigger redeploy with latest STK wiring",
+        "createdAt": "2025-12-03T10:58:32Z"
+      },
+      "status": "live",
+      "trigger": "manual",
+      "createdAt": "2025-12-03T13:03:45.695827Z",
+      "updatedAt": "2025-12-03T13:08:33.24108Z",
+      "startedAt": "2025-12-03T13:03:45.456631Z",
+      "finishedAt": "2025-12-03T13:07:56.627483Z"
+    },
+    "cursor": "mvlIJWcwq29hYnE0ZDUwYzczYTkzcWQw"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4o319i4d50c73a8lfgg",
+      "commit": {
+        "id": "9e9496ea8cd21333d2b13f09d552c7fe595ce2e9",
+        "message": "ci: trigger redeploy with latest STK wiring",
+        "createdAt": "2025-12-03T10:58:32Z"
+      },
+      "status": "deactivated",
+      "trigger": "api",
+      "createdAt": "2025-12-03T12:44:24.927892Z",
+      "updatedAt": "2025-12-03T13:07:56.626277Z",
+      "startedAt": "2025-12-03T12:44:24.018851Z",
+      "finishedAt": "2025-12-03T12:46:56.697498Z"
+    },
+    "cursor": "mvlIJWcwq28xOWk0ZDUwYzczYThsZmdn"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4o2i7a4d50c73a7qrog",
+      "commit": {
+        "id": "9e9496ea8cd21333d2b13f09d552c7fe595ce2e9",
+        "message": "ci: trigger redeploy with latest STK wiring",
+        "createdAt": "2025-12-03T10:58:32Z"
+      },
+      "status": "deactivated",
+      "trigger": "api",
+      "createdAt": "2025-12-03T12:12:16.868293Z",
+      "updatedAt": "2025-12-03T12:46:56.694575Z",
+      "startedAt": "2025-12-03T12:12:16.688841Z",
+      "finishedAt": "2025-12-03T12:13:52.502768Z"
+    },
+    "cursor": "Al_2xxeGradpN2E0ZDUwYzczYTdxcm9n"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4o1p7euk2gs73846pqg",
+      "commit": {
+        "id": "9e9496ea8cd21333d2b13f09d552c7fe595ce2e9",
+        "message": "ci: trigger redeploy with latest STK wiring",
+        "createdAt": "2025-12-03T10:58:32Z"
+      },
+      "status": "deactivated",
+      "trigger": "api",
+      "createdAt": "2025-12-03T11:18:54.89102Z",
+      "updatedAt": "2025-12-03T12:13:52.501627Z",
+      "startedAt": "2025-12-03T11:18:54.794184Z",
+      "finishedAt": "2025-12-03T11:19:51.85435Z"
+    },
+    "cursor": "1bdt6Zco-4xwN2V1azJnczczODQ2cHFn"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4o08l49c44c73dal63g",
+      "commit": {
+        "id": "49e467309a23e3cab1ba0f5810f5248bc2d546da",
+        "message": "payments: create payments row on STK push; update payments status on webhook activation",
+        "createdAt": "2025-12-03T08:58:24Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-03T09:35:18.838365Z",
+      "updatedAt": "2025-12-03T11:19:51.852434Z",
+      "startedAt": "2025-12-03T09:35:18.541055Z",
+      "finishedAt": "2025-12-03T09:37:36.90559Z"
+    },
+    "cursor": "SHlYHh_0TdI4bDQ5YzQ0YzczZGFsNjNn"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4nvd9khg0os739rm7p0",
+      "commit": {
+        "id": "6bcaa393c6d6ccd55fc43fd4ff4b71c023719cbe",
+        "message": "worker: add Postgres pool and scheduled Lipana reconciliation",
+        "createdAt": "2025-12-03T08:35:42Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-03T08:36:56.410007Z",
+      "updatedAt": "2025-12-03T09:37:36.904455Z",
+      "startedAt": "2025-12-03T08:36:56.366642Z",
+      "finishedAt": "2025-12-03T08:37:56.605561Z"
+    },
+    "cursor": "UsP7p_Os1ZNkOWtoZzBvczczOXJtN3Aw"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4npdokhg0os739imfkg",
+      "commit": {
+        "id": "f6c15fada2fe971c5264b63541475fadd28a6d3b",
+        "message": "fix: add payoutAccount (Till 6062105) to STK push payload",
+        "createdAt": "2025-12-03T01:43:27Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-03T01:48:20.063716Z",
+      "updatedAt": "2025-12-03T08:37:56.603183Z",
+      "startedAt": "2025-12-03T01:48:19.615993Z",
+      "finishedAt": "2025-12-03T01:49:09.162316Z"
+    },
+    "cursor": "vPYto4J2iD5kb2toZzBvczczOWltZmtn"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4npcop5pdvs73aba270",
+      "commit": {
+        "id": "f6c15fada2fe971c5264b63541475fadd28a6d3b",
+        "message": "fix: add payoutAccount (Till 6062105) to STK push payload",
+        "createdAt": "2025-12-03T01:43:27Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-03T01:46:13.309937Z",
+      "updatedAt": "2025-12-03T01:49:09.160542Z",
+      "startedAt": "2025-12-03T01:46:13.228911Z",
+      "finishedAt": "2025-12-03T01:47:01.631681Z"
+    },
+    "cursor": "vPYto4J2iD5jb3A1cGR2czczYWJhMjcw"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4npbm3e5dus738a9l00",
+      "commit": {
+        "id": "f6c15fada2fe971c5264b63541475fadd28a6d3b",
+        "message": "fix: add payoutAccount (Till 6062105) to STK push payload",
+        "createdAt": "2025-12-03T01:43:27Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-03T01:43:54.062423Z",
+      "updatedAt": "2025-12-03T01:47:01.630753Z",
+      "startedAt": "2025-12-03T01:43:53.90875Z",
+      "finishedAt": "2025-12-03T01:44:41.98854Z"
+    },
+    "cursor": "vPYto4J2iD5ibTNlNWR1czczOGE5bDAw"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4noae3e5dus73898ph0",
+      "commit": {
+        "id": "081264dd5808f6ad0e416b48aae98d0af6910fe8",
+        "message": "chore: finalize Lipana integration with correct API key and webhook secret",
+        "createdAt": "2025-12-03T00:32:34Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-03T00:32:59.019798Z",
+      "updatedAt": "2025-12-03T01:44:41.987356Z",
+      "startedAt": "2025-12-03T00:32:58.772559Z",
+      "finishedAt": "2025-12-03T00:33:54.308684Z"
+    },
+    "cursor": "iDE7ov2Wt7phZTNlNWR1czczODk4cGgw"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4no2e15pdvs73aa64vg",
+      "commit": {
+        "id": "360a6ab7fad741245d5dd5d166cbdb34b9cafd95",
+        "message": "fix: use LIPANA_WEBHOOK_SECRET for webhook signature verification",
+        "createdAt": "2025-12-03T00:15:34Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-03T00:15:53.603565Z",
+      "updatedAt": "2025-12-03T00:33:54.30755Z",
+      "startedAt": "2025-12-03T00:15:53.352019Z",
+      "finishedAt": "2025-12-03T00:16:43.97667Z"
+    },
+    "cursor": "iDE7ov2Wt7oyZTE1cGR2czczYWE2NHZn"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4no0ruuk2gs73foidcg",
+      "commit": {
+        "id": "68ea3996b5f5cf0351f9c8e8c2b051edf55190a2",
+        "message": "fix: multi-secret Lipana signature verification",
+        "createdAt": "2025-12-03T00:12:08Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-03T00:12:32.537861Z",
+      "updatedAt": "2025-12-03T00:16:43.975738Z",
+      "startedAt": "2025-12-03T00:12:32.464588Z",
+      "finishedAt": "2025-12-03T00:13:30.599487Z"
+    },
+    "cursor": "iDE7ov2Wt7owcnV1azJnczczZm9pZGNn"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4nns1je5dus7388tv90",
+      "commit": {
+        "id": "2307525e8be4b981cb0974a7abeea36ab6d50e54",
+        "message": "Fix webhook signature verification with UTF8NoBOM + Send-LipanaWebhook function",
+        "createdAt": "2025-12-02T21:28:53Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-03T00:02:16.304154Z",
+      "updatedAt": "2025-12-03T00:13:30.59513Z",
+      "startedAt": "2025-12-03T00:02:16.169633Z",
+      "finishedAt": "2025-12-03T00:04:53.432799Z"
+    },
+    "cursor": "Gex1CFQd9TJzMWplNWR1czczODh0djkw"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4nnptq4d50c739oepsg",
+      "commit": {
+        "id": "2307525e8be4b981cb0974a7abeea36ab6d50e54",
+        "message": "Fix webhook signature verification with UTF8NoBOM + Send-LipanaWebhook function",
+        "createdAt": "2025-12-02T21:28:53Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-02T23:57:44.548685Z",
+      "updatedAt": "2025-12-03T00:04:53.426084Z",
+      "startedAt": "2025-12-02T23:57:44.46864Z",
+      "finishedAt": "2025-12-02T23:58:35.946298Z"
+    },
+    "cursor": "Gex1CFQd9TJwdHE0ZDUwYzczOW9lcHNn"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4nnjremcj7s73c1momg",
+      "commit": {
+        "id": "2307525e8be4b981cb0974a7abeea36ab6d50e54",
+        "message": "Fix webhook signature verification with UTF8NoBOM + Send-LipanaWebhook function",
+        "createdAt": "2025-12-02T21:28:53Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-02T23:44:47.153559Z",
+      "updatedAt": "2025-12-02T23:58:35.945089Z",
+      "startedAt": "2025-12-02T23:44:46.694153Z",
+      "finishedAt": "2025-12-02T23:46:07.277419Z"
+    },
+    "cursor": "Gex1CFQd9TJqcmVtY2o3czczYzFtb21n"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4nngg95pdvs73a9o17g",
+      "commit": {
+        "id": "2307525e8be4b981cb0974a7abeea36ab6d50e54",
+        "message": "Fix webhook signature verification with UTF8NoBOM + Send-LipanaWebhook function",
+        "createdAt": "2025-12-02T21:28:53Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-02T23:37:40.130915Z",
+      "updatedAt": "2025-12-02T23:46:07.272981Z",
+      "startedAt": "2025-12-02T23:37:40.031863Z",
+      "finishedAt": "2025-12-02T23:38:34.859444Z"
+    },
+    "cursor": "Gex1CFQd9TJnZzk1cGR2czczYTlvMTdn"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4nmdvf5r7bs73c20f50",
+      "commit": {
+        "id": "2307525e8be4b981cb0974a7abeea36ab6d50e54",
+        "message": "Fix webhook signature verification with UTF8NoBOM + Send-LipanaWebhook function",
+        "createdAt": "2025-12-02T21:28:53Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-02T22:23:59.392475Z",
+      "updatedAt": "2025-12-02T23:38:34.858424Z",
+      "startedAt": "2025-12-02T22:23:59.299359Z",
+      "finishedAt": "2025-12-02T22:25:58.254963Z"
+    },
+    "cursor": "6jlqe_QZbf5kdmY1cjdiczczYzIwZjUw"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4nmcf0gjchc73bu018g",
+      "commit": {
+        "id": "2307525e8be4b981cb0974a7abeea36ab6d50e54",
+        "message": "Fix webhook signature verification with UTF8NoBOM + Send-LipanaWebhook function",
+        "createdAt": "2025-12-02T21:28:53Z"
+      },
+      "status": "deactivated",
+      "trigger": "service_updated",
+      "createdAt": "2025-12-02T22:20:46.104122Z",
+      "updatedAt": "2025-12-02T22:25:58.253857Z",
+      "startedAt": "2025-12-02T22:20:45.707774Z",
+      "finishedAt": "2025-12-02T22:21:46.148737Z"
+    },
+    "cursor": "6jlqe_QZbf5jZjBnamNoYzczYnUwMThn"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4nm2f63jp1c73cvm480",
+      "commit": {
+        "id": "2307525e8be4b981cb0974a7abeea36ab6d50e54",
+        "message": "Fix webhook signature verification with UTF8NoBOM + Send-LipanaWebhook function",
+        "createdAt": "2025-12-02T21:28:53Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-02T21:59:26.594008Z",
+      "updatedAt": "2025-12-02T22:21:46.146747Z",
+      "startedAt": "2025-12-02T21:59:26.099265Z",
+      "finishedAt": "2025-12-02T22:00:15.19394Z"
+    },
+    "cursor": "6jlqe_QZbf4yZjYzanAxYzczY3ZtNDgw"
+  },
+  {
+    "deploy": {
+      "id": "dep-d4nlp1ur433s73e60fcg",
+      "commit": {
+        "id": "2307525e8be4b981cb0974a7abeea36ab6d50e54",
+        "message": "Fix webhook signature verification with UTF8NoBOM + Send-LipanaWebhook function",
+        "createdAt": "2025-12-02T21:28:53Z"
+      },
+      "status": "deactivated",
+      "trigger": "manual",
+      "createdAt": "2025-12-02T21:39:20.891629Z",
+      "updatedAt": "2025-12-02T22:00:15.190461Z",
+      "startedAt": "2025-12-02T21:39:20.817447Z",
+      "finishedAt": "2025-12-02T21:40:15.702175Z"
+    },
+    "cursor": "Qoh5JD_yvZJwMXVyNDMzczczZTYwZmNn"
+  }
+]
