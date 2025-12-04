@@ -1,10 +1,119 @@
-﻿// Single minimal ESM Express app (overwrite)
+﻿import express from 'express';
+import bodyParser from 'body-parser';
+import crypto from 'crypto';
+import { Pool } from 'pg';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+
+// Ensure TLS settings (useful on Render-like platforms)
+process.env.PGSSLMODE = process.env.PGSSLMODE || 'require';
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED || '0';
+
+const app = express();
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+
+// capture raw body for HMAC verification
+app.use(bodyParser.json({ limit: '5mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
+
+function safeLog(...args) { try { console.log(...args); } catch (e) {} }
+
+app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
+
+app.get('/admin/queue', (_req, res) => {
+  return res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null });
+});
+
+app.get('/admin/webhook-fallback', (req, res) => {
+  try {
+    const n = Math.min(100, Number(req.query.n || 50));
+    const repoPath = path.join(process.cwd(), 'webhooks.log');
+    const tmpPath = path.join(os.tmpdir(), 'webhooks.log');
+    const result = {};
+
+    for (const item of [{ p: repoPath, label: 'repo' }, { p: tmpPath, label: 'tmp' }]) {
+      try {
+        if (!fs.existsSync(item.p)) { result[item.label] = null; continue; }
+        const txt = fs.readFileSync(item.p, 'utf8');
+        const lines = txt.split(/\r?\n/).filter(Boolean);
+        const tail = lines.slice(-n).map(l => { try { return JSON.parse(l); } catch { return l; } });
+        result[item.label] = tail;
+      } catch (e) {
+        result[item.label] = { error: e?.message || String(e) };
+      }
+    }
+
+    return res.json({ ok: true, files: result });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err?.message || String(err) });
+  }
+});
+
+app.post('/webhook/mpesa', async (req, res) => {
+  const secret = process.env.LIPANA_WEBHOOK_SECRET || process.env.MPESA_WEBHOOK_SECRET || process.env.LIPANA_SECRET;
+  const incoming = req.headers['x-lipana-signature'] || req.headers['x-signature'] || req.headers['signature'] || '';
+  try {
+    const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}), 'utf8');
+    let computedHex = null;
+    let computedB64 = null;
+    if (secret) {
+      const h = crypto.createHmac('sha256', String(secret)).update(raw).digest();
+      computedHex = h.toString('hex');
+      computedB64 = h.toString('base64');
+    }
+
+    safeLog('[webhook/mpesa] incoming=', incoming, 'computedHexPrefix=', computedHex ? computedHex.slice(0,16) : null);
+
+    // Best-effort persistence for debugging
+    try {
+      await pool.query(`CREATE TABLE IF NOT EXISTS webhooks (id SERIAL PRIMARY KEY, created_at timestamptz DEFAULT now(), raw_payload jsonb, headers jsonb, incoming_signature text, computed_hex text, computed_b64 text)`);
+      await pool.query('INSERT INTO webhooks(raw_payload, headers, incoming_signature, computed_hex, computed_b64) VALUES($1,$2,$3,$4,$5)', [req.body || {}, req.headers || {}, incoming, computedHex, computedB64]);
+    } catch (e) {
+      // Fallback: append the webhook to a local file so nothing is lost while DB is flaky
+      try {
+        const rec = { ts: new Date().toISOString(), headers: req.headers || {}, body: req.body || {}, incoming_signature: incoming, computedHex, computedB64 };
+        const logPath = path.join(process.cwd(), 'webhooks.log');
+        const tmpPath = path.join(os.tmpdir(), 'webhooks.log');
+        fs.appendFileSync(logPath, JSON.stringify(rec) + '\n', { encoding: 'utf8' });
+        fs.appendFileSync(tmpPath, JSON.stringify(rec) + '\n', { encoding: 'utf8' });
+        safeLog('DB insert failed; appended webhook to', logPath, 'and', tmpPath);
+      } catch (fsErr) {
+        safeLog('DB insert failed and fallback file write failed:', fsErr?.message || String(fsErr));
+      }
+      safeLog('DB insert failed (webhook):', e?.message || String(e));
+    }
+
+    // Return 200 so upstream won't retry while we debug
+    return res.status(200).send('OK');
+  } catch (err) {
+    safeLog('Webhook handler error:', err?.message || String(err));
+    return res.status(200).send('OK');
+  }
+});
+
+// Named export for other modules (workers) to import
+export function registerDataExposureAPI() {
+  // placeholder for any runtime registration the worker may need
+  safeLog('registerDataExposureAPI called');
+  return { ok: true };
+}
+
+export default app;
+
+// Single PORT binding and listen when run directly
+if (require.main === undefined || process.env.RUN_AS_MODULE !== '1') {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    safeLog(`Server running on port ${PORT} - src/app.js`);
+  });
+}
+// Minimal clean ESM Express app
 import express from 'express';
 import bodyParser from 'body-parser';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 import { fileURLToPath } from 'url';
 import { Pool } from 'pg';
 
@@ -24,12 +133,10 @@ function safeLog(...args) { try { console.log(...args); } catch (e) {} }
 app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
 
 app.post('/webhook/mpesa', async (req, res) => {
-  const secret = process.env.LIPANA_WEBHOOK_SECRET || process.env.MPESA_WEBHOOK_SECRET || process.env.LIPANA_SECRET;
   try {
     const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}), 'utf8');
-    let computedHex = null;
-    if (secret) computedHex = crypto.createHmac('sha256', String(secret)).update(raw).digest('hex');
-    // best-effort write: try DB, else fallback file
+    const secret = process.env.LIPANA_WEBHOOK_SECRET || process.env.MPESA_WEBHOOK_SECRET || process.env.LIPANA_SECRET;
+    const computedHex = secret ? crypto.createHmac('sha256', String(secret)).update(raw).digest('hex') : null;
     try {
       await pool.query(`CREATE TABLE IF NOT EXISTS webhooks (id SERIAL PRIMARY KEY, created_at timestamptz DEFAULT now(), raw_payload jsonb)`);
       await pool.query('INSERT INTO webhooks(raw_payload) VALUES($1)', [req.body || {}]);
@@ -39,6 +146,14 @@ app.post('/webhook/mpesa', async (req, res) => {
     return res.status(200).send('OK');
   } catch (err) { safeLog('webhook error', String(err)); return res.status(200).send('OK'); }
 });
+
+export default app;
+
+// start server when executed directly
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => safeLog(`Server running on port ${PORT}`));
+}
 
 export default app;
 
@@ -314,7 +429,7 @@ app.post('/webhook/mpesa', async (req, res) => {
 // Single PORT binding and listen
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} - app.js:363`);
+  console.log(`Server running on port ${PORT} - app.js:322`);
 });
 
 export default app;
@@ -421,7 +536,7 @@ app.post('/webhook/mpesa', async (req, res) => {
 // Final PORT binding (single listen)
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} - app.js:470`);
+  console.log(`Server running on port ${PORT} - app.js:429`);
 });
 
 export default app;
@@ -726,7 +841,7 @@ export default app;
       const _rawSecret = process.env.LIPANA_SECRET ? String(process.env.LIPANA_SECRET) : '';
       const trimmedSecret = _rawSecret.trim();
       const secretFingerprint = trimmedSecret ? crypto.createHash('sha256').update(trimmedSecret).digest('hex').slice(0,8) : '(no-secret)';
-      console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:775', secretFingerprint);
+      console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:734', secretFingerprint);
     } catch (e) {
       // ignore logging errors
     }
@@ -1052,8 +1167,8 @@ function verifySignature(req) {
   try {
     const fingerprint = crypto.createHash('sha256').update(lipanaSecret).digest('hex').substring(0,8);
     const incomingPreview = signature ? `${String(signature).slice(0,64)}...len:${String(signature).length}` : '(empty)';
-    console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:1101', fingerprint);
-    console.log('[verifySignature] Incoming signature(header)= - app.js:1102', incomingPreview);
+    console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:1060', fingerprint);
+    console.log('[verifySignature] Incoming signature(header)= - app.js:1061', incomingPreview);
   } catch (e) {
     // ignore logging errors
   }
@@ -1065,16 +1180,16 @@ function verifySignature(req) {
     const rawPreview = raw && raw.slice(0, 1024) ? raw.slice(0, 1024).toString('utf8') : '(empty)';
     const rawHex = raw && raw.slice(0, 64) ? raw.slice(0, 64).toString('hex') : '';
     const parsedPreview = req.body ? JSON.stringify(req.body).slice(0,1024) : '(no parsed body)';
-    console.log('[verifySignature] contenttype= - app.js:1114', ct, 'content-length=', cl);
-    console.log('[verifySignature] rawPreview(utf8,first1k)= - app.js:1115', rawPreview);
-    console.log('[verifySignature] rawPreview(hex,first64bytes)= - app.js:1116', rawHex);
-    console.log('[verifySignature] parsed(JSON.stringify) preview= - app.js:1117', parsedPreview);
+    console.log('[verifySignature] contenttype= - app.js:1073', ct, 'content-length=', cl);
+    console.log('[verifySignature] rawPreview(utf8,first1k)= - app.js:1074', rawPreview);
+    console.log('[verifySignature] rawPreview(hex,first64bytes)= - app.js:1075', rawHex);
+    console.log('[verifySignature] parsed(JSON.stringify) preview= - app.js:1076', parsedPreview);
   } catch (e) {
     // ignore logging errors
   }
 
   if (!lipanaSecret) {
-    try { console.log('[verifySignature] LIPANA_SECRET is missing or empty - app.js:1123'); } catch (e) {}
+    try { console.log('[verifySignature] LIPANA_SECRET is missing or empty - app.js:1082'); } catch (e) {}
     return false;
   }
 
@@ -1090,8 +1205,8 @@ function verifySignature(req) {
       req._computedHmacB64 = expectedBase64;
       req._rawPreviewHex = raw && raw.slice(0,64) ? raw.slice(0,64).toString('hex') : '';
     }
-    console.log('[verifySignature] Computed expectedHex(first16)= - app.js:1139', expectedHex.slice(0,16), '...');
-    console.log('[verifySignature] Computed expectedBase64(first16)= - app.js:1140', expectedBase64.slice(0,16), '...');
+    console.log('[verifySignature] Computed expectedHex(first16)= - app.js:1098', expectedHex.slice(0,16), '...');
+    console.log('[verifySignature] Computed expectedBase64(first16)= - app.js:1099', expectedBase64.slice(0,16), '...');
   } catch (e) {}
 
   const safeCompare = (aBuf, bBuf) => {
@@ -1550,7 +1665,7 @@ export function registerDataExposureAPI(sportsAggregator) {
 // Export core app pieces and initialized data services for other modules
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} - app.js:1599`);
+  console.log(`Server running on port ${PORT} - app.js:1558`);
 });
 
 
