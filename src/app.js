@@ -1,4 +1,206 @@
-﻿// Single-file clean implementation
+﻿// Single-file clean implementation for webhook handling and data-exposure registration
+import express from 'express';
+import bodyParser from 'body-parser';
+import crypto from 'crypto';
+import { Pool } from 'pg';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
+import DataExposureHandler from './handlers/data-exposure-handler.js';
+
+// Ensure sensible defaults for Postgres TLS in hosted environments
+process.env.PGSSLMODE = process.env.PGSSLMODE || 'require';
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED || '0';
+
+const app = express();
+// Pool: best-effort TLS settings for managed Postgres (adjust in prod)
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+
+// capture raw body for HMAC verification
+app.use(bodyParser.json({ limit: '5mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
+
+function safeLog(...args) { try { console.log(...args); } catch (e) {} }
+app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
+
+app.get('/admin/queue', (_req, res) => res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null }));
+app.get('/admin/webhook-fallback', (req, res) => {
+  try {
+    const n = Math.min(100, Number(req.query.n || 50));
+  const repoPath = path.join(process.cwd(), 'webhooks.log');
+  const tmpPath = path.join(os.tmpdir(), 'webhooks.log');
+  const result = {};
+    for (const item of [{ p: repoPath, label: 'repo' }, { p: tmpPath, label: 'tmp' }]) {
+      try {
+        if (!fs.existsSync(item.p)) { result[item.label] = null; continue; }
+  const txt = fs.readFileSync(item.p, 'utf8');
+  const lines = txt.split(/\r?\n/).filter(Boolean);
+  result[item.label] = lines.slice(-n).map(l => { try { return JSON.parse(l); } catch { return l; } });
+      } catch (e) { result[item.label] = { error: e?.message || String(e) }; }
+    }
+    return res.json({ ok: true, files: result });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post('/webhook/mpesa', async (req, res) => {
+  const secret = process.env.LIPANA_WEBHOOK_SECRET || process.env.MPESA_WEBHOOK_SECRET || process.env.LIPANA_SECRET;
+  const incoming = req.headers['x-lipana-signature'] || req.headers['x-signature'] || req.headers['signature'] || '';
+  try {
+  const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}), 'utf8');
+  let computedHex = null, computedB64 = null;
+  if (secret) {
+      const h = crypto.createHmac('sha256', String(secret)).update(raw).digest();
+      computedHex = h.toString('hex'); computedB64 = h.toString('base64');
+    }
+  safeLog('[webhook/mpesa] incoming=', incoming, 'computedHexPrefix=', computedHex ? computedHex.slice(0,16) : null);
+
+  try {
+  // best-effort ensure table exists then insert
+  await pool.query(`CREATE TABLE IF NOT EXISTS webhooks (id SERIAL PRIMARY KEY, created_at timestamptz DEFAULT now(), raw_payload jsonb, headers jsonb, incoming_signature text, computed_hex text, computed_b64 text)`);
+  await pool.query('INSERT INTO webhooks(raw_payload, headers, incoming_signature, computed_hex, computed_b64) VALUES($1,$2,$3,$4,$5)', [req.body || {}, req.headers || {}, incoming, computedHex, computedB64]);
+    } catch (e) {
+      // fallback: append to files in repo and tmp so nothing is lost while DB is flaky
+      try {
+  const rec = { ts: new Date().toISOString(), headers: req.headers || {}, body: req.body || {}, incoming_signature: incoming, computedHex, computedB64 };
+  const logPath = path.join(process.cwd(), 'webhooks.log');
+  const tmpPath = path.join(os.tmpdir(), 'webhooks.log');
+  fs.appendFileSync(logPath, JSON.stringify(rec) + '\n', { encoding: 'utf8' });
+  fs.appendFileSync(tmpPath, JSON.stringify(rec) + '\n', { encoding: 'utf8' });
+  safeLog('DB insert failed; appended webhook to', logPath, 'and', tmpPath);
+      } catch (fsErr) { safeLog('DB insert failed and fallback file write failed:', fsErr?.message || String(fsErr)); }
+      safeLog('DB insert failed (webhook):', e?.message || String(e));
+    }
+    // respond 200 to avoid upstream retries while debugging
+    return res.status(200).send('OK');
+  } catch (err) {
+    safeLog('Webhook handler error:', String(err));
+    return res.status(200).send('OK');
+  }
+});
+
+export function registerDataExposureAPI(sportsAggregator) {
+  try { new DataExposureHandler(app, sportsAggregator); safeLog('DATA_EXPOSURE: registered endpoints'); }
+  catch (err) { safeLog('DATA_EXPOSURE registration failed:', String(err)); }
+}
+
+export default app;
+
+// Only start HTTP server when this file is executed directly (not when imported)
+try {
+  const __filename = fileURLToPath(import.meta.url);
+  if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename)) {
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => safeLog(`Server running on port ${PORT}`));
+  }
+} catch (e) {
+  // non-fatal if detection fails; do not start server when imported
+}
+// Clean single-file Express app for webhook handling and data exposure registration
+import express from 'express';
+import bodyParser from 'body-parser';
+import crypto from 'crypto';
+import { Pool } from 'pg';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
+import DataExposureHandler from './handlers/data-exposure-handler.js';
+
+// Ensure sensible defaults for Postgres TLS in hosted environments
+process.env.PGSSLMODE = process.env.PGSSLMODE || 'require';
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED || '0';
+
+const app = express();
+
+// Pool: best-effort TLS settings for managed Postgres (adjust in prod)
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+
+// capture raw body for HMAC verification
+app.use(bodyParser.json({ limit: '5mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
+
+function safeLog(...args) { try { console.log(...args); } catch (e) {} }
+
+app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
+
+app.get('/admin/queue', (_req, res) => res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null }));
+
+app.get('/admin/webhook-fallback', (req, res) => {
+  try {
+    const n = Math.min(100, Number(req.query.n || 50));
+    const repoPath = path.join(process.cwd(), 'webhooks.log');
+    const tmpPath = path.join(os.tmpdir(), 'webhooks.log');
+    const result = {};
+    for (const item of [{ p: repoPath, label: 'repo' }, { p: tmpPath, label: 'tmp' }]) {
+      try {
+        if (!fs.existsSync(item.p)) { result[item.label] = null; continue; }
+        const txt = fs.readFileSync(item.p, 'utf8');
+        const lines = txt.split(/\r?\n/).filter(Boolean);
+        result[item.label] = lines.slice(-n).map(l => { try { return JSON.parse(l); } catch { return l; } });
+      } catch (e) { result[item.label] = { error: e?.message || String(e) }; }
+    }
+    return res.json({ ok: true, files: result });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post('/webhook/mpesa', async (req, res) => {
+  const secret = process.env.LIPANA_WEBHOOK_SECRET || process.env.MPESA_WEBHOOK_SECRET || process.env.LIPANA_SECRET;
+  const incoming = req.headers['x-lipana-signature'] || req.headers['x-signature'] || req.headers['signature'] || '';
+  try {
+    const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}), 'utf8');
+    let computedHex = null, computedB64 = null;
+    if (secret) {
+      const h = crypto.createHmac('sha256', String(secret)).update(raw).digest();
+      computedHex = h.toString('hex'); computedB64 = h.toString('base64');
+    }
+    safeLog('[webhook/mpesa] incoming=', incoming, 'computedHexPrefix=', computedHex ? computedHex.slice(0,16) : null);
+
+    try {
+      // best-effort ensure table exists then insert
+      await pool.query(`CREATE TABLE IF NOT EXISTS webhooks (id SERIAL PRIMARY KEY, created_at timestamptz DEFAULT now(), raw_payload jsonb, headers jsonb, incoming_signature text, computed_hex text, computed_b64 text)`);
+      await pool.query('INSERT INTO webhooks(raw_payload, headers, incoming_signature, computed_hex, computed_b64) VALUES($1,$2,$3,$4,$5)', [req.body || {}, req.headers || {}, incoming, computedHex, computedB64]);
+    } catch (e) {
+      // fallback: append to files in repo and tmp so nothing is lost while DB is flaky
+      try {
+        const rec = { ts: new Date().toISOString(), headers: req.headers || {}, body: req.body || {}, incoming_signature: incoming, computedHex, computedB64 };
+        const logPath = path.join(process.cwd(), 'webhooks.log');
+        const tmpPath = path.join(os.tmpdir(), 'webhooks.log');
+        fs.appendFileSync(logPath, JSON.stringify(rec) + '\n', { encoding: 'utf8' });
+        fs.appendFileSync(tmpPath, JSON.stringify(rec) + '\n', { encoding: 'utf8' });
+        safeLog('DB insert failed; appended webhook to', logPath, 'and', tmpPath);
+      } catch (fsErr) { safeLog('DB insert failed and fallback file write failed:', fsErr?.message || String(fsErr)); }
+      safeLog('DB insert failed (webhook):', e?.message || String(e));
+    }
+
+    // respond 200 to avoid upstream retries while debugging
+    return res.status(200).send('OK');
+  } catch (err) {
+    safeLog('Webhook handler error:', String(err));
+    return res.status(200).send('OK');
+  }
+});
+
+export function registerDataExposureAPI(sportsAggregator) {
+  try { new DataExposureHandler(app, sportsAggregator); safeLog('DATA_EXPOSURE: registered endpoints'); }
+  catch (err) { safeLog('DATA_EXPOSURE registration failed:', String(err)); }
+}
+
+export default app;
+
+// Only start HTTP server when this file is executed directly (not when imported)
+try {
+  const __filename = fileURLToPath(import.meta.url);
+  if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename)) {
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => safeLog(`Server running on port ${PORT}`));
+  }
+} catch (e) {
+  // non-fatal if detection fails; do not start server when imported
+}
+// Single-file clean implementation
 import express from 'express';
 import bodyParser from 'body-parser';
 import crypto from 'crypto';
@@ -154,7 +356,7 @@ app.post('/webhook/mpesa', async (req, res) => {
 // Single PORT binding and listen
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} - app.js:158`);
+  console.log(`Server running on port ${PORT} - app.js:260`);
 });
 
 export default app;
@@ -261,7 +463,7 @@ app.post('/webhook/mpesa', async (req, res) => {
 // Final PORT binding (single listen)
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} - app.js:265`);
+  console.log(`Server running on port ${PORT} - app.js:367`);
 });
 
 export default app;
@@ -566,7 +768,7 @@ export default app;
       const _rawSecret = process.env.LIPANA_SECRET ? String(process.env.LIPANA_SECRET) : '';
       const trimmedSecret = _rawSecret.trim();
       const secretFingerprint = trimmedSecret ? crypto.createHash('sha256').update(trimmedSecret).digest('hex').slice(0,8) : '(no-secret)';
-      console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:570', secretFingerprint);
+      console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:672', secretFingerprint);
     } catch (e) {
       // ignore logging errors
     }
@@ -892,8 +1094,8 @@ function verifySignature(req) {
   try {
     const fingerprint = crypto.createHash('sha256').update(lipanaSecret).digest('hex').substring(0,8);
     const incomingPreview = signature ? `${String(signature).slice(0,64)}...len:${String(signature).length}` : '(empty)';
-    console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:896', fingerprint);
-    console.log('[verifySignature] Incoming signature(header)= - app.js:897', incomingPreview);
+    console.log('[verifySignature] LIPANA_SECRET fingerprint(first8)= - app.js:998', fingerprint);
+    console.log('[verifySignature] Incoming signature(header)= - app.js:999', incomingPreview);
   } catch (e) {
     // ignore logging errors
   }
@@ -905,16 +1107,16 @@ function verifySignature(req) {
     const rawPreview = raw && raw.slice(0, 1024) ? raw.slice(0, 1024).toString('utf8') : '(empty)';
     const rawHex = raw && raw.slice(0, 64) ? raw.slice(0, 64).toString('hex') : '';
     const parsedPreview = req.body ? JSON.stringify(req.body).slice(0,1024) : '(no parsed body)';
-    console.log('[verifySignature] contenttype= - app.js:909', ct, 'content-length=', cl);
-    console.log('[verifySignature] rawPreview(utf8,first1k)= - app.js:910', rawPreview);
-    console.log('[verifySignature] rawPreview(hex,first64bytes)= - app.js:911', rawHex);
-    console.log('[verifySignature] parsed(JSON.stringify) preview= - app.js:912', parsedPreview);
+    console.log('[verifySignature] contenttype= - app.js:1011', ct, 'content-length=', cl);
+    console.log('[verifySignature] rawPreview(utf8,first1k)= - app.js:1012', rawPreview);
+    console.log('[verifySignature] rawPreview(hex,first64bytes)= - app.js:1013', rawHex);
+    console.log('[verifySignature] parsed(JSON.stringify) preview= - app.js:1014', parsedPreview);
   } catch (e) {
     // ignore logging errors
   }
 
   if (!lipanaSecret) {
-    try { console.log('[verifySignature] LIPANA_SECRET is missing or empty - app.js:918'); } catch (e) {}
+    try { console.log('[verifySignature] LIPANA_SECRET is missing or empty - app.js:1020'); } catch (e) {}
     return false;
   }
 
@@ -930,8 +1132,8 @@ function verifySignature(req) {
       req._computedHmacB64 = expectedBase64;
       req._rawPreviewHex = raw && raw.slice(0,64) ? raw.slice(0,64).toString('hex') : '';
     }
-    console.log('[verifySignature] Computed expectedHex(first16)= - app.js:934', expectedHex.slice(0,16), '...');
-    console.log('[verifySignature] Computed expectedBase64(first16)= - app.js:935', expectedBase64.slice(0,16), '...');
+    console.log('[verifySignature] Computed expectedHex(first16)= - app.js:1036', expectedHex.slice(0,16), '...');
+    console.log('[verifySignature] Computed expectedBase64(first16)= - app.js:1037', expectedBase64.slice(0,16), '...');
   } catch (e) {}
 
   const safeCompare = (aBuf, bBuf) => {
@@ -1390,7 +1592,7 @@ export function registerDataExposureAPI(sportsAggregator) {
 // Export core app pieces and initialized data services for other modules
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} - app.js:1394`);
+  console.log(`Server running on port ${PORT} - app.js:1496`);
 });
 
 
