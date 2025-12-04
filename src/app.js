@@ -1,24 +1,4 @@
-﻿// Final clean implementation — single import block, single export, no duplicates
-import express from 'express';
-import bodyParser from 'body-parser';
-import crypto from 'crypto';
-import { Pool } from 'pg';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import { fileURLToPath } from 'url';
-import DataExposureHandler from './handlers/data-exposure-handler.js';
-
-process.env.PGSSLMODE = process.env.PGSSLMODE || 'require';
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED || '0';
-
-const app = express();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
-app.use(bodyParser.json({ limit: '5mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
-
-function safeLog(...args) { try { console.log(...args); } catch (e) {} }
-
-// Clean single-file Express app: webhook handling, HMAC capture, fallback persistence
+﻿// Consolidated clean Express app for webhook HMAC capture and fallback persistence
 import express from 'express';
 import bodyParser from 'body-parser';
 import crypto from 'crypto';
@@ -29,7 +9,6 @@ import { fileURLToPath } from 'url';
 import { Pool } from 'pg';
 import DataExposureHandler from './handlers/data-exposure-handler.js';
 
-// sensible defaults for hosted Postgres TLS (override in production explicitly)
 process.env.PGSSLMODE = process.env.PGSSLMODE || 'require';
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED || '0';
 
@@ -83,7 +62,6 @@ app.post('/webhook/mpesa', async (req, res) => {
       await pool.query(`CREATE TABLE IF NOT EXISTS webhooks (id SERIAL PRIMARY KEY, created_at timestamptz DEFAULT now(), raw_payload jsonb, headers jsonb, incoming_signature text, computed_hex text, computed_b64 text)`);
       await pool.query('INSERT INTO webhooks(raw_payload, headers, incoming_signature, computed_hex, computed_b64) VALUES($1,$2,$3,$4,$5)', [req.body || {}, req.headers || {}, incoming, computedHex, computedB64]);
     } catch (e) {
-      // fallback writes to repo and tmp if DB fails
       try {
         const rec = { ts: new Date().toISOString(), headers: req.headers || {}, body: req.body || {}, incoming_signature: incoming, computedHex, computedB64 };
         const logPath = path.join(process.cwd(), 'webhooks.log');
@@ -95,7 +73,6 @@ app.post('/webhook/mpesa', async (req, res) => {
       safeLog('DB insert failed (webhook):', e?.message || String(e));
     }
 
-    // respond 200 to avoid upstream retries while debugging
     return res.status(200).send('OK');
   } catch (err) {
     safeLog('Webhook handler error:', String(err));
@@ -120,144 +97,7 @@ try {
   // non-fatal
 }
 
-// End of cleaned app.js
-
-app.post('/webhook/mpesa', async (req, res) => {
-  const secret = process.env.LIPANA_WEBHOOK_SECRET || process.env.MPESA_WEBHOOK_SECRET || process.env.LIPANA_SECRET;
-  const incoming = req.headers['x-lipana-signature'] || req.headers['x-signature'] || req.headers['signature'] || '';
-  try {
-    const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}), 'utf8');
-    let computedHex = null, computedB64 = null;
-    if (secret) {
-      const h = crypto.createHmac('sha256', String(secret)).update(raw).digest();
-      computedHex = h.toString('hex'); computedB64 = h.toString('base64');
-    }
-    safeLog('[webhook/mpesa] incoming=', incoming, 'computedHexPrefix=', computedHex ? computedHex.slice(0,16) : null);
-
-    try {
-      // best-effort ensure table exists then insert
-      await pool.query(`CREATE TABLE IF NOT EXISTS webhooks (id SERIAL PRIMARY KEY, created_at timestamptz DEFAULT now(), raw_payload jsonb, headers jsonb, incoming_signature text, computed_hex text, computed_b64 text)`);
-      await pool.query('INSERT INTO webhooks(raw_payload, headers, incoming_signature, computed_hex, computed_b64) VALUES($1,$2,$3,$4,$5)', [req.body || {}, req.headers || {}, incoming, computedHex, computedB64]);
-    } catch (e) {
-      // fallback: append to files in repo and tmp so nothing is lost while DB is flaky
-      try {
-        const rec = { ts: new Date().toISOString(), headers: req.headers || {}, body: req.body || {}, incoming_signature: incoming, computedHex, computedB64 };
-        const logPath = path.join(process.cwd(), 'webhooks.log');
-        const tmpPath = path.join(os.tmpdir(), 'webhooks.log');
-        fs.appendFileSync(logPath, JSON.stringify(rec) + '\n', { encoding: 'utf8' });
-        fs.appendFileSync(tmpPath, JSON.stringify(rec) + '\n', { encoding: 'utf8' });
-        safeLog('DB insert failed; appended webhook to', logPath, 'and', tmpPath);
-      } catch (fsErr) { safeLog('DB insert failed and fallback file write failed:', fsErr?.message || String(fsErr)); }
-      safeLog('DB insert failed (webhook):', e?.message || String(e));
-    }
-
-    // respond 200 to avoid upstream retries while debugging
-    return res.status(200).send('OK');
-  } catch (err) {
-    safeLog('Webhook handler error:', String(err));
-    return res.status(200).send('OK');
-  }
-});
-
-export function registerDataExposureAPI(sportsAggregator) {
-  try { new DataExposureHandler(app, sportsAggregator); safeLog('DATA_EXPOSURE: registered endpoints'); }
-  catch (err) { safeLog('DATA_EXPOSURE registration failed:', String(err)); }
-}
-
-export default app;
-
-// Only start HTTP server when this file is executed directly (not when imported)
-try {
-  const __filename = fileURLToPath(import.meta.url);
-  if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename)) {
-    const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => safeLog(`Server running on port ${PORT}`));
-  }
-} catch (e) {
-  // non-fatal if detection fails; do not start server when imported
-}
-// Single-file clean implementation
-import express from 'express';
-import bodyParser from 'body-parser';
-import crypto from 'crypto';
-import { Pool } from 'pg';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import DataExposureHandler from './handlers/data-exposure-handler.js';
-
-process.env.PGSSLMODE = process.env.PGSSLMODE || 'require';
-
-const app = express();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
-app.use(bodyParser.json({ limit: '5mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
-
-function safeLog(...args) { try { console.log(...args); } catch (e) {} }
-
-app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
-app.get('/admin/queue', (_req, res) => res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null }));
-
-app.get('/admin/webhook-fallback', (req, res) => {
-  try {
-    const n = Math.min(100, Number(req.query.n || 50));
-    const repoPath = path.join(process.cwd(), 'webhooks.log');
-    const tmpPath = path.join(os.tmpdir(), 'webhooks.log');
-    const result = {};
-    for (const item of [{ p: repoPath, label: 'repo' }, { p: tmpPath, label: 'tmp' }]) {
-      try {
-        if (!fs.existsSync(item.p)) { result[item.label] = null; continue; }
-        const txt = fs.readFileSync(item.p, 'utf8');
-        const lines = txt.split(/\r?\n/).filter(Boolean);
-        result[item.label] = lines.slice(-n).map(l => { try { return JSON.parse(l); } catch { return l; } });
-      } catch (e) { result[item.label] = { error: e?.message || String(e) }; }
-    }
-    return res.json({ ok: true, files: result });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: String(err) });
-  }
-});
-
-app.post('/webhook/mpesa', async (req, res) => {
-  const secret = process.env.LIPANA_WEBHOOK_SECRET || process.env.MPESA_WEBHOOK_SECRET || process.env.LIPANA_SECRET;
-  const incoming = req.headers['x-lipana-signature'] || req.headers['x-signature'] || req.headers['signature'] || '';
-  try {
-    const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}), 'utf8');
-    let computedHex = null, computedB64 = null;
-    if (secret) {
-      const h = crypto.createHmac('sha256', String(secret)).update(raw).digest();
-      computedHex = h.toString('hex'); computedB64 = h.toString('base64');
-    }
-    safeLog('[webhook/mpesa] incoming=', incoming, 'computedHexPrefix=', computedHex ? computedHex.slice(0,16) : null);
-    try {
-      await pool.query(`CREATE TABLE IF NOT EXISTS webhooks (id SERIAL PRIMARY KEY, created_at timestamptz DEFAULT now(), raw_payload jsonb, headers jsonb, incoming_signature text, computed_hex text, computed_b64 text)`);
-      await pool.query('INSERT INTO webhooks(raw_payload, headers, incoming_signature, computed_hex, computed_b64) VALUES($1,$2,$3,$4,$5)', [req.body || {}, req.headers || {}, incoming, computedHex, computedB64]);
-    } catch (e) {
-      try {
-        const rec = { ts: new Date().toISOString(), headers: req.headers || {}, body: req.body || {}, incoming_signature: incoming, computedHex, computedB64 };
-        fs.appendFileSync(path.join(process.cwd(), 'webhooks.log'), JSON.stringify(rec) + '\n', { encoding: 'utf8' });
-        fs.appendFileSync(path.join(os.tmpdir(), 'webhooks.log'), JSON.stringify(rec) + '\n', { encoding: 'utf8' });
-        safeLog('DB insert failed; appended webhook to fallback files');
-      } catch (fsErr) { safeLog('Fallback write failed:', fsErr?.message || String(fsErr)); }
-      safeLog('DB insert failed (webhook):', e?.message || String(e));
-    }
-    return res.status(200).send('OK');
-  } catch (err) {
-    safeLog('Webhook handler error:', String(err));
-    return res.status(200).send('OK');
-  }
-});
-
-export function registerDataExposureAPI(sportsAggregator) {
-  try { new DataExposureHandler(app, sportsAggregator); safeLog('DATA_EXPOSURE: registered endpoints'); }
-  catch (err) { safeLog('DATA_EXPOSURE registration failed:', String(err)); }
-}
-
-if (require.main === module) {
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => safeLog(`Server running on port ${PORT}`));
-}
-
-export default app;
+// EOF
 
 // Admin: return last N fallback webhook entries from fallback files
 app.get('/admin/webhook-fallback', (req, res) => {
