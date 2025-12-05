@@ -234,6 +234,15 @@ export function getRedis(opts = {}) {
     throw new Error('redis.rpoplpush not supported by client');
   });
 
+  // Log the final capabilities to help diagnose hosted clients at startup
+  try {
+    const required = ['expire', 'publish', 'brpoplpush', 'rpoplpush', 'rpop', 'lpush'];
+    const present = required.reduce((acc, k) => { acc[k] = typeof _instance[k] === 'function'; return acc; }, {});
+    console.log('[redis-factory] 🔎 Redis capability check:', present);
+  } catch (e) {
+    console.warn('[redis-factory] ⚠️  Could not perform capability check', e && e.message ? e.message : e);
+  }
+
   return _instance;
 }
 
