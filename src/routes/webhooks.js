@@ -48,21 +48,39 @@ export default function createWebhooksRouter() {
     }
   });
 
-  // Telegram webhook endpoint — must return 200 OK to stop Telegram retries
-  router.post('/telegram', express.json({ limit: '1mb' }), async (req, res) => {
+  // Telegram webhook endpoint — accept any method and always return 200 OK to stop Telegram retries
+  // Also accept optional secret in path: /telegram or /telegram/:secret
+  const telegramHandler = async (req, res) => {
     try {
-      // Minimal logging for debugging; avoid throwing
+      // Ensure body parsed for POST/PUT; don't throw on parse errors
+      // Log method, path, headers and body to webhooks.log for debugging on Render
       try {
-        const rec = { ts: new Date().toISOString(), source: 'telegram', body: req.body || {}, headers: req.headers || {} };
+        const rec = {
+          ts: new Date().toISOString(),
+          source: 'telegram',
+          method: req.method,
+          url: req.originalUrl,
+          params: req.params || {},
+          query: req.query || {},
+          body: req.body || {},
+          headers: req.headers || {}
+        };
         const logPath = path.join(process.cwd(), 'webhooks.log');
         fs.appendFileSync(logPath, JSON.stringify(rec) + '\n', { encoding: 'utf8' });
+        // Also write to tmp for additional visibility on some platforms
+        try { fs.appendFileSync(path.join(os.tmpdir(), 'webhooks.log'), JSON.stringify(rec) + '\n', { encoding: 'utf8' }); } catch (_) { /* ignore */ }
       } catch (e) { /* ignore logging errors */ }
-      // Respond 200 OK
+
+      // Always acknowledge with 200 OK. Telegram requires 200 to stop retries.
       return res.status(200).send('OK');
     } catch (err) {
       return res.status(200).send('OK');
     }
-  });
+  };
+
+  // Use express.json for routes that expect a JSON body, but accept any method for resiliency
+  router.all('/telegram', express.json({ limit: '1mb' }), telegramHandler);
+  router.all('/telegram/:secret', express.json({ limit: '1mb' }), telegramHandler);
 
   return router;
 }
