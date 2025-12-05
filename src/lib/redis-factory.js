@@ -122,6 +122,15 @@ class MockRedis {
     // Blocking is not implemented for MockRedis; behave like rpoplpush
     return await this.rpoplpush(source, dest);
   }
+
+  async quit() {
+    // No real connection to close in MockRedis; behave like OK
+    return 'OK';
+  }
+
+  async disconnect() {
+    return 'OK';
+  }
 }
 
 export function getRedis(opts = {}) {
@@ -212,10 +221,14 @@ export function getRedis(opts = {}) {
   function attachIfMissing(name, impl) {
     if (typeof _instance[name] !== 'function') {
       try {
+        // If an original implementation exists, capture it so wrappers
+        // can call the original without recursing into themselves.
+        const original = _instance[name];
+        const wrapped = typeof impl === 'function' ? impl : () => { throw new Error('invalid impl'); };
         // Attach both to the instance and the prototype to cover
         // different client shapes (proxied objects, wrapped clients).
-        try { _instance[name] = impl; } catch (e) {}
-        try { if (_instance && _instance.constructor && _instance.constructor.prototype) _instance.constructor.prototype[name] = impl; } catch (e) {}
+        try { _instance[name] = wrapped.bind(_instance, original); } catch (e) { _instance[name] = wrapped; }
+        try { if (_instance && _instance.constructor && _instance.constructor.prototype) _instance.constructor.prototype[name] = wrapped; } catch (e) {}
         console.log(`[redis-factory] ⚙️  Attached compatibility wrapper for ${name}`);
       } catch (e) {
         console.warn(`[redis-factory] ⚠️  Could not attach wrapper for ${name}`, e && e.message ? e.message : e);
@@ -224,21 +237,24 @@ export function getRedis(opts = {}) {
   }
 
   // EXPIRE key seconds
-  attachIfMissing('expire', async (key, seconds) => {
+  attachIfMissing('expire', (original, key, seconds) => (async () => {
+    if (typeof original === 'function') return await original.call(_instance, key, seconds);
     if (sendCmd) return (await sendCmd(['EXPIRE', key, String(seconds)]));
     if (callCmd) return (await callCmd('EXPIRE', key, String(seconds)));
     throw new Error('redis.expire not supported by client');
-  });
+  })());
 
   // PUBLISH channel message
-  attachIfMissing('publish', async (channel, message) => {
+  attachIfMissing('publish', (original, channel, message) => (async () => {
+    if (typeof original === 'function') return await original.call(_instance, channel, message);
     if (sendCmd) return (await sendCmd(['PUBLISH', channel, String(message)]));
     if (callCmd) return (await callCmd('PUBLISH', channel, String(message)));
     throw new Error('redis.publish not supported by client');
-  });
+  })());
 
   // BRPOPLPUSH source dest timeout
-  attachIfMissing('brpoplpush', async (source, dest, timeout = 0) => {
+  attachIfMissing('brpoplpush', (original, source, dest, timeout = 0) => (async () => {
+    if (typeof original === 'function') return await original.call(_instance, source, dest, timeout);
     if (sendCmd) return (await sendCmd(['BRPOPLPUSH', source, dest, String(timeout)]));
     if (callCmd) return (await callCmd('BRPOPLPUSH', source, dest, String(timeout)));
     // Fallback: try BRPOP followed by LPUSH (non-atomic, only for best-effort fallback)
@@ -251,14 +267,11 @@ export function getRedis(opts = {}) {
       return val;
     }
     throw new Error('redis.brpoplpush not supported by client');
-  });
+  })());
 
   // RPOPLPUSH source dest
-  attachIfMissing('rpoplpush', async (source, dest) => {
-    // Try native RPOPLPUSH first
-    if (typeof _instance.rpoplpush === 'function') {
-      return await _instance.rpoplpush(source, dest);
-    }
+  attachIfMissing('rpoplpush', (original, source, dest) => (async () => {
+    if (typeof original === 'function') return await original.call(_instance, source, dest);
     if (sendCmd) return (await sendCmd(['RPOPLPUSH', source, dest]));
     if (callCmd) return (await callCmd('RPOPLPUSH', source, dest));
     // Fallback: try RPOP then LPUSH (non-atomic)
@@ -269,7 +282,16 @@ export function getRedis(opts = {}) {
       return val;
     }
     throw new Error('redis.rpoplpush not supported by client');
-  });
+  })());
+
+  // QUIT / graceful disconnect shim (some clients expose quit, others disconnect)
+  attachIfMissing('quit', (original) => (async () => {
+    if (typeof original === 'function') return await original.call(_instance);
+    if (typeof _instance.disconnect === 'function') return await _instance.disconnect();
+    if (typeof _instance.quit === 'function') return await _instance.quit();
+    // As a last resort, no-op
+    return 'OK';
+  })());
 
   // Log the final capabilities to help diagnose hosted clients at startup
   try {
