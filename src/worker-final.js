@@ -954,6 +954,27 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
+// Start the HTTP admin/debug server inside the worker process as a fallback
+// This ensures admin endpoints (e.g. /admin/routes, /admin/redis-ping, /webhook/*)
+// are available even if Render or another platform invokes the worker entrypoint
+// as the service start command. Set START_HTTP_IN_WORKER=false to disable.
+if (process.env.START_HTTP_IN_WORKER !== 'false') {
+  try {
+    const { default: app } = await import('./app.js');
+    try {
+      const httpPort = Number(process.env.PORT || 5000);
+      const server = app.listen(httpPort, () => logger.info(`⚓ HTTP admin server started inside worker on port ${httpPort}`));
+      server.on('error', (e) => logger.warn('HTTP admin server error', e?.message || String(e)));
+    } catch (e) {
+      logger.warn('Failed to start HTTP server inside worker', e?.message || String(e));
+    }
+  } catch (e) {
+    logger.warn('Could not import app to start HTTP server inside worker', e?.message || String(e));
+  }
+} else {
+  logger.info('START_HTTP_IN_WORKER set to false — not starting HTTP admin server in worker');
+}
+
 main().catch(err => {
   logger.error("Fatal", err);
   process.exit(1);
