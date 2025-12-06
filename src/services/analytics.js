@@ -15,7 +15,6 @@ function decimalToImplied(odd) {
 function kellyFraction(p, b) {
   // p = probability (0..1), b = decimal-1 (edge units)
   if (b <= 0) return 0;
-  const q = 1 - p;
   const f = (p * (b + 1) - 1) / b; // fractional Kelly
   return Math.max(0, Math.min(1, f || 0));
 }
@@ -29,7 +28,7 @@ function simpleModelProbability(homePointsPerGame, awayPointsPerGame, homeAdv = 
   return Math.max(0.01, Math.min(0.99, raw));
 }
 
-async function predictMatch({ home, away, homeOdds = null, awayOdds = null, homePtsPerGame = null, awayPtsPerGame = null }) {
+async function predictMatch({ home, away, homeOdds = null, _awayOdds = null, homePtsPerGame = null, awayPtsPerGame = null }) {
   try {
     // Estimate model probability using points per game if available
     const pHome = simpleModelProbability(homePtsPerGame, awayPtsPerGame);

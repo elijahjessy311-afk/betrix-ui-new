@@ -10,6 +10,7 @@ import assert from 'assert';
 import { Logger } from '../src/utils/logger.js';
 
 const logger = new Logger('BotTests');
+void logger;
 
 // Mock Redis client
 class MockRedis {

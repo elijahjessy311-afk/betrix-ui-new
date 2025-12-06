@@ -1,10 +1,7 @@
 const axios = require("axios");
 // Injected by hotfix: use TELEGRAM_BOT_TOKEN from env
 const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || process.env.TELEGRAM_TOKEN;
-const apiMethod = apiMethod || 'sendMessage';
-
-
-const { ask } = require('../utils/openai');
+const apiMethod = 'sendMessage';
 module.exports = async function handleTelegram(payload, cfg = {}) {
   try {
     const BOT_TOKEN = cfg.BOT_TOKEN || process.env.BOT_TOKEN;

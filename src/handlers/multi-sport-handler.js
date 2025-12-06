@@ -135,7 +135,7 @@ export async function handleMarketSelection(callbackData, chatId, userId, redis,
     const match = callbackData.match(/^analyze_markets_(.+)_(.+)_(.+)$/);
     if (!match) return null;
 
-    const [_, sport, homeTeam, awayTeam] = match;
+    const [, sport, homeTeam, awayTeam] = match;
 
     const analysis = await services.multiSportAnalyzer.analyzeMatch(
       sport,

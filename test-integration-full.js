@@ -5,16 +5,14 @@
 
 import assert from 'assert';
 import fs from 'fs';
-import SportMonksAPI from './src/services/sportmonks-api.js';
-import SportsDataAPI from './src/services/sportsdata-api.js';
+import { SportMonksAPI } from './src/services/sportmonks-api.js';
+import { SportsDataAPI } from './src/services/sportsdata-api.js';
 import { TIERS } from './src/handlers/payment-handler.js';
 import { createPaymentOrder, getPaymentInstructions, PAYMENT_PROVIDERS, getAvailablePaymentMethods } from './src/handlers/payment-router.js';
 
 console.log('🧪 Starting BETRIX Bot Integration Tests...\n');
 
-// Mock data
-const mockUserId = 12345;
-const mockChatId = 54321;
+// Mock data (not used in this quick integration script)
 
 // Test counters
 let passed = 0;

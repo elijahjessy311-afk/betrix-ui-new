@@ -6,6 +6,7 @@
 import { Logger } from '../utils/logger.js';
 
 const logger = new Logger('BetrixBranding');
+void logger;
 
 // BETRIX Official Brand Guidelines
 export const BETRIX_BRANDING = {
@@ -204,8 +205,8 @@ export function formatBetrixError(error, userTier = 'FREE') {
   
   let message = '';
   
-  if (error.type === 'quota') {
-    message = `${BETRIX_BRANDING.ICONS.loading} We\'re experiencing high demand right now.\n\nPlease try again in a moment.`;
+    if (error.type === 'quota') {
+    message = `${BETRIX_BRANDING.ICONS.loading} We're experiencing high demand right now.\n\nPlease try again in a moment.`;
   } else if (error.type === 'unauthorized') {
     message = `${BETRIX_BRANDING.ICONS.warning} This feature requires a ${userTier === 'FREE' ? 'PRO' : 'VVIP'} subscription.\n\nUpgrade to unlock premium insights!`;
   } else if (error.type === 'connection') {

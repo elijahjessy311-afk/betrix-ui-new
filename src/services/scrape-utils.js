@@ -3,6 +3,7 @@ import { Logger } from '../utils/logger.js';
 import { CONFIG } from '../config.js';
 
 const logger = new Logger('ScrapeUtils');
+void CONFIG;
 
 /**
  * Naive robots.txt checker — fetches robots.txt for host and checks for a global Disallow: /

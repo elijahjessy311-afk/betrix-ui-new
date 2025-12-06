@@ -1,7 +1,5 @@
 // Normalize match and standings data from multiple sources and provide confidence score
 
-const sourcePriority = ['openligadb', 'footballdata', 'scorebat'];
-
 function normalizeMatch(raw, source) {
   // raw is source specific; try to extract common fields
   const out = { source, home: raw.HomeTeam || raw.home || raw.Home || raw.hometeam || raw.home_team || raw.home_name || null, away: raw.AwayTeam || raw.away || raw.Away || raw.awayteam || raw.away_name || null, date: raw.MatchDate || raw.Date || raw.date || raw.match_date || raw.datetime || null, score: null };

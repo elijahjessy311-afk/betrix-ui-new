@@ -6,6 +6,7 @@
 import { Logger } from "../utils/logger.js";
 
 const logger = new Logger("MemeService");
+void logger;
 
 class MemeService {
   /**

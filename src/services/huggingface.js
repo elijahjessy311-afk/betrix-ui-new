@@ -47,7 +47,7 @@ class HuggingFaceService {
     return JSON.stringify(data).slice(0, 2000);
   }
 
-  async chat(message, context = {}) {
+  async chat(message, _context = {}) {
     if (!this.enabled) return null;
     let lastErr = null;
     for (const m of this.models) {

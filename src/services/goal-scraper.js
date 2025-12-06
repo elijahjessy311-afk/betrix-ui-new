@@ -113,7 +113,7 @@ export function getGoalLeagueCodes() {
  * Fetch odds comparison page (simplified)
  * Goal typically embeds odds from multiple providers
  */
-export async function getGoalOdds(matchId = null) {
+export async function getGoalOdds(_matchId = null) {
   try {
     // Generic odds page; Goal updates dynamically, this is best-effort
     const url = 'https://www.goal.com/en/odds';

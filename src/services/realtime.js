@@ -2,7 +2,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 
 let wss = null;
 
-export function startRealtimeServer(options = {}) {
+export function startRealtimeServer(_options = {}) {
   const port = Number(process.env.WS_PORT || (Number(process.env.PORT || 5000) + 1));
   if (wss) return wss;
   wss = new WebSocketServer({ port });
@@ -14,7 +14,7 @@ export function startRealtimeServer(options = {}) {
         const data = typeof msg === 'string' ? msg : msg.toString();
         // simple ping/pong or subscribe messages
         if (data === 'ping') return socket.send('pong');
-      } catch (e) {}
+      } catch (e) { void e; }
     });
   });
 
@@ -27,7 +27,7 @@ export function startRealtimeServer(options = {}) {
     });
   }, 30000);
 
-  wss.on('close', () => clearInterval(iv));
+  wss.on('close', () => { try { clearInterval(iv); } catch (e) { void e; } });
   console.log(`Realtime WS server listening on port ${port}`);
   return wss;
 }

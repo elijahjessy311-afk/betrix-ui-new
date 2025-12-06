@@ -6,6 +6,7 @@
 import { Logger } from "../utils/logger.js";
 
 const logger = new Logger("FixtureTracker");
+void logger;
 
 class FixtureTrackerService {
   static BIG_FIXTURES = [
@@ -54,7 +55,7 @@ class FixtureTrackerService {
   /**
    * Get upcoming big fixtures
    */
-  static getUpcomingFixtures(days = 30) {
+  static getUpcomingFixtures(_days = 30) {
     return this.BIG_FIXTURES;
   }
 

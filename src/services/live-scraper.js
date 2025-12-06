@@ -30,6 +30,7 @@ const proxies = (process.env.LIVE_SCRAPER_PROXIES || '')
   .filter(p => p.length > 0);
 let proxyIndex = 0;
 const proxyAgentCache = new Map();
+void proxyAgentCache;
 
 function getNextProxy() {
   if (proxies.length === 0) return null;
@@ -38,7 +39,7 @@ function getNextProxy() {
   return p;
 }
 
-function getProxyAgent(proxyUrl) {
+function getProxyAgent(_proxyUrl) {
   // Proxy agents disabled - not installed
   // if (!proxyUrl) return null;
   // 

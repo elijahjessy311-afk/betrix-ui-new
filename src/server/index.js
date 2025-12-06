@@ -17,5 +17,13 @@ try {
   module.exports = {};
 }
 
-const telegramRouter = require('./telegram-webhook');
-app.use(telegramRouter);
+// Safely expose the telegram router so callers (e.g. the real server bootstrap)
+// can mount it. Avoid calling `app.use` here because `app` may not be defined
+// in this wrapper context which previously caused runtime/lint errors.
+try {
+  module.exports.telegramRouter = require('./telegram-webhook');
+} catch (e) {
+  // If the telegram webhook module is missing, keep exports intact and
+  // allow the caller to decide how to proceed. Log at debug level.
+  // console.debug('telegram-webhook not available', e && e.message);
+}

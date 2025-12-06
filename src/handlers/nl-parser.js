@@ -6,6 +6,7 @@
 import { Logger } from '../utils/logger.js';
 
 const logger = new Logger('NLParser');
+void logger;
 
 // Intent detection patterns (lowercase)
 const intents = {

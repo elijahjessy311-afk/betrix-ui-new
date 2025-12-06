@@ -15,6 +15,9 @@ module.exports = {
   ],
   rules: {
     'no-console': 'off',
-    'import/no-unresolved': 'off'
+    'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+    'import/no-unresolved': 'off',
+    'import/no-named-as-default-member': 'warn',
+    'import/no-named-as-default': 'warn'
   }
 };

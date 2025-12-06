@@ -18,6 +18,7 @@ const logger = new Logger('HandlerComplete');
  */
 async function getLiveMatches(services = {}, sport = 'football') {
   try {
+    void sport;
     // Prefer injected sportsAggregator if available (provides caching and fixtures integration)
     if (services && services.sportsAggregator && typeof services.sportsAggregator.getAllLiveMatches === 'function') {
       return await services.sportsAggregator.getAllLiveMatches();
@@ -51,7 +52,7 @@ async function getLiveMatches(services = {}, sport = 'football') {
 /**
  * Handle /start command - show main menu
  */
-export async function handleStart(chatId, services = {}) {
+export async function handleStart(chatId, _services = {}) {
   return {
     method: 'sendMessage',
     chat_id: chatId,
@@ -64,7 +65,7 @@ export async function handleStart(chatId, services = {}) {
 /**
  * Handle /menu command - show main menu
  */
-export async function handleMenu(chatId, services = {}) {
+export async function handleMenu(chatId, _services = {}) {
   return {
     method: 'sendMessage',
     chat_id: chatId,
@@ -608,13 +609,13 @@ export async function handleCallbackQuery(cq, redis, services) {
                     VALUES($1,$2,$3,$4,$5, now())`;
                   const metadata = { provider: 'LIPANA', provider_checkout_id: providerCheckout, orderId: order.orderId };
                   await pool.query(insertSql, [order.orderId, order.userId, order.totalAmount || amount, 'pending', JSON.stringify(metadata)]);
-                  try { await pool.end(); } catch(e){}
+                  try { await pool.end(); } catch(e){ void e; }
                 }
               } catch (ee) {
                 logger.warn('Failed to persist payments row for STK push', ee?.message || String(ee));
               }
               // Store quick lookup mapping so webhook can resolve provider ref -> orderId
-              try { await redis.setex(`payment:by_provider_ref:MPESA:${providerCheckout}`, 900, order.orderId); } catch (e) { /* ignore */ }
+              try { await redis.setex(`payment:by_provider_ref:MPESA:${providerCheckout}`, 900, order.orderId); } catch (e) { void e; }
             }
           } catch (e) {
             logger.warn('Lipana STK push failed', e?.message || String(e));

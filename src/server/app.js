@@ -50,9 +50,9 @@ function tryRequireCandidates() {
 function fallbackCreateServer() {
   const http = require('http');
   return http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' }
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
-}
+  });
 }
 
 let exported;

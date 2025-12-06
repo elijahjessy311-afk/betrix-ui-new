@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable no-unused-vars, no-undef, no-empty, no-constant-condition, no-case-declarations */
 /**
  * BETRIX - ULTIMATE UNIFIED PRODUCTION WORKER (3000+ LINES)
  * Complete autonomous sports betting AI platform

@@ -4,7 +4,7 @@ process.env.SPORTSMONKS_INSECURE = process.env.SPORTSMONKS_INSECURE || 'true'; /
 
 import Redis from 'ioredis';
 import { SportsAggregator } from '../src/services/sports-aggregator.js';
-import handler from '../src/handlers/telegram-handler-v2-clean.js';
+import { handleCallbackQuery } from '../src/handlers/telegram-handler-v2-clean.js';
 
 const redis = new Redis(process.env.REDIS_URL);
 
@@ -29,7 +29,7 @@ async function run() {
       }
     };
 
-    const resp = await handler.handleCallbackQuery(update, redis, { sportsAggregator: agg });
+    const resp = await handleCallbackQuery(update, redis, { sportsAggregator: agg });
     console.log('\nHandler response:');
     console.log(resp);
   } catch (e) {

@@ -7,6 +7,7 @@ import { Logger } from '../utils/logger.js';
 import * as paypal from '@paypal/checkout-server-sdk';
 
 const logger = new Logger('PaymentRouter');
+void logger;
 
 // Payment providers configuration
 export const PAYMENT_PROVIDERS = {
@@ -114,6 +115,7 @@ export function normalizePaymentMethod(method) {
  * Get available payment methods for user region
  */
 export function getAvailablePaymentMethods(userRegion = 'KE') {
+  void userRegion;
   // By default make all providers available (user requested global availability).
   // Keep env var for backward compatibility, but default to all providers.
   return Object.entries(PAYMENT_PROVIDERS).map(([key, provider]) => ({ id: key, ...provider }));
@@ -847,54 +849,50 @@ export function parseTransactionMessage(text) {
  *  - Otherwise check user's pending order and compare amounts
  */
 export async function verifyPaymentFromMessage(redis, userId, text) {
-  try {
-    const parsed = parseTransactionMessage(text);
-    const { reference, phone, amount, transactionId } = parsed;
+  const parsed = parseTransactionMessage(text);
+  const { reference, phone, amount, transactionId } = parsed;
 
-    // 1) Reference lookup across providers
-    if (reference) {
-      for (const key of Object.keys(PAYMENT_PROVIDERS)) {
-        try {
-          const oid = await redis.get(`payment:by_provider_ref:${key}:${reference}`);
-          if (oid) {
-            // Use reference as transactionId if none
-            const tx = transactionId || reference;
-            return await verifyAndActivatePayment(redis, oid, tx);
-          }
-        } catch (e) {
-          // ignore individual provider lookup failures
+  // 1) Reference lookup across providers
+  if (reference) {
+    for (const key of Object.keys(PAYMENT_PROVIDERS)) {
+      try {
+        const oid = await redis.get(`payment:by_provider_ref:${key}:${reference}`);
+        if (oid) {
+          // Use reference as transactionId if none
+          const tx = transactionId || reference;
+          return await verifyAndActivatePayment(redis, oid, tx);
         }
+      } catch (e) {
+        // ignore individual provider lookup failures
       }
     }
-
-    // 2) Phone lookup
-    if (phone) {
-      const phoneNorm = String(phone).replace(/\+|\s|-/g, '');
-      const oid = await redis.get(`payment:by_phone:${phoneNorm}`);
-      if (oid) {
-        const tx = transactionId || (`PHONE-${Date.now()}`);
-        return await verifyAndActivatePayment(redis, oid, tx);
-      }
-    }
-
-    // 3) Check user's pending order and match by amount tolerance
-    const pending = await redis.get(`payment:by_user:${userId}:pending`);
-    if (pending) {
-      const orderRaw = await redis.get(`payment:order:${pending}`);
-      if (orderRaw) {
-        const order = JSON.parse(orderRaw);
-        // Compare amounts (allow small rounding differences)
-        if (amount && Math.abs(Number(order.totalAmount) - Number(amount)) <= 1) {
-          const tx = transactionId || (`MSG-${Date.now()}`);
-          return await verifyAndActivatePayment(redis, pending, tx);
-        }
-      }
-    }
-
-    throw new Error('Could not match the pasted transaction to any pending order. Please ensure your payment included the reference or pay the exact amount shown in the payment instructions.');
-  } catch (err) {
-    throw err;
   }
+
+  // 2) Phone lookup
+  if (phone) {
+    const phoneNorm = String(phone).replace(/\+|\s|-/g, '');
+    const oid = await redis.get(`payment:by_phone:${phoneNorm}`);
+    if (oid) {
+      const tx = transactionId || (`PHONE-${Date.now()}`);
+      return await verifyAndActivatePayment(redis, oid, tx);
+    }
+  }
+
+  // 3) Check user's pending order and match by amount tolerance
+  const pending = await redis.get(`payment:by_user:${userId}:pending`);
+  if (pending) {
+    const orderRaw = await redis.get(`payment:order:${pending}`);
+    if (orderRaw) {
+      const order = JSON.parse(orderRaw);
+      // Compare amounts (allow small rounding differences)
+      if (amount && Math.abs(Number(order.totalAmount) - Number(amount)) <= 1) {
+        const tx = transactionId || (`MSG-${Date.now()}`);
+        return await verifyAndActivatePayment(redis, pending, tx);
+      }
+    }
+  }
+
+  throw new Error('Could not match the pasted transaction to any pending order. Please ensure your payment included the reference or pay the exact amount shown in the payment instructions.');
 }
 
 export default {

@@ -10,6 +10,7 @@
 import { Logger } from '../utils/logger.js';
 
 const logger = new Logger('MenuSystem');
+void logger;
 
 const BETRIX_EMOJI = '🌀';
 const BETRIX_HEADER = `${BETRIX_EMOJI} *BETRIX* - Premium Sports Analytics`;
@@ -237,7 +238,7 @@ I'll notify you when a match starts. Meanwhile, want a quick prediction demo? Ty
     if (game.score) text += `   Score: ${game.score.home} - ${game.score.away}\n`;
     text += `   Tip: ${game.tip || 'No tip yet — run /analyze for a short preview'}\n\n`;
   }
-  text += `⚡ Use \/odds <fixture-id> to view current odds (example: \/odds 12345), or run \/analyze <home> vs <away> for a prediction.`;
+  text += `⚡ Use /odds <fixture-id> to view current odds (example: /odds 12345), or run /analyze <home> vs <away> for a prediction.`;
   return text;
 }
 
@@ -247,59 +248,34 @@ I'll notify you when a match starts. Meanwhile, want a quick prediction demo? Ty
 
 export function formatOdds(odds, fixtureId) {
   // Provide a lively, explanatory odds summary
-  // Try to pick common bookmaker snapshot fields if provided
-    // Provide a lively, explanatory odds summary
-    // Aggregate up to two bookmaker snapshots for comparison when available
-    const bk = Array.isArray(odds?.bookmakers) ? odds.bookmakers.slice(0, 2) : [];
+  const bk = Array.isArray(odds?.bookmakers) ? odds.bookmakers.slice(0, 2) : [];
 
-    const snapshot = (source) => {
-      if (!source) return { home: 'N/A', draw: 'N/A', away: 'N/A', label: 'Market' };
-      // Try several common paths
-      const label = source.title || source.name || (source.bk || 'Bookmaker');
-      const market = source.markets?.[0] || source.bets?.[0] || null;
-      if (market && market.outcomes) {
-        const home = market.outcomes.find(o => /home|1/i.test(o.name))?.price ?? market.outcomes[0]?.price ?? 'N/A';
-        const draw = market.outcomes.find(o => /draw|x/i.test(o.name))?.price ?? market.outcomes[1]?.price ?? 'N/A';
-        const away = market.outcomes.find(o => /away|2/i.test(o.name))?.price ?? market.outcomes[2]?.price ?? 'N/A';
-        return { home, draw, away, label };
-      }
-      // Fallback to simple values
-      return { home: source.home ?? 'N/A', draw: source.draw ?? 'N/A', away: source.away ?? 'N/A', label };
-    };
-
-    const aggregated = bk.map(snapshot);
-
-    // Primary odds (first source or generic fields)
-    const primary = aggregated[0] || snapshot(odds);
-    const secondary = aggregated[1] || null;
-
-    let lines = `${BETRIX_HEADER}\n\n💰 *Odds & Quick Analysis*\n\nMatch: ${fixtureId || 'Fixture details'}\n\n`;
-    lines += `🏷️ *Odds Snapshot* (${primary.label}):\n• Home: ${primary.home} · Draw: ${primary.draw} · Away: ${primary.away}\n`;
-    if (secondary) {
-      lines += `• Compared with ${secondary.label}: Home ${secondary.home}, Draw ${secondary.draw}, Away ${secondary.away}\n`;
+  const snapshot = (source) => {
+    if (!source) return { home: 'N/A', draw: 'N/A', away: 'N/A', label: 'Market' };
+    const label = source.title || source.name || (source.bk || 'Bookmaker');
+    const market = source.markets?.[0] || source.bets?.[0] || null;
+    if (market && market.outcomes) {
+      const home = market.outcomes.find(o => /home|1/i.test(o.name))?.price ?? market.outcomes[0]?.price ?? 'N/A';
+      const draw = market.outcomes.find(o => /draw|x/i.test(o.name))?.price ?? market.outcomes[1]?.price ?? 'N/A';
+      const away = market.outcomes.find(o => /away|2/i.test(o.name))?.price ?? market.outcomes[2]?.price ?? 'N/A';
+      return { home, draw, away, label };
     }
+    return { home: source.home ?? 'N/A', draw: source.draw ?? 'N/A', away: source.away ?? 'N/A', label };
+  };
 
-    lines += `\n🔍 *Quick Insight:*\n• Recommendation: *${odds?.recommended || 'Compare markets'}*\n• Confidence: *${odds?.confidence || 'N/A'}*\n\n💡 Tip: Compare multiple bookmakers and look for >10% edge before staking.\nType \/analyze <home> vs <away> for a short prediction, or upgrade to VVIP for full reports.`;
+  const aggregated = bk.map(snapshot);
+  const primary = aggregated[0] || snapshot(odds);
+  const secondary = aggregated[1] || null;
 
-    return lines;
+  let lines = `${BETRIX_HEADER}\n\n💰 *Odds & Quick Analysis*\n\nMatch: ${fixtureId || 'Fixture details'}\n\n`;
+  lines += `🏷️ *Odds Snapshot* (${primary.label}):\n• Home: ${primary.home} · Draw: ${primary.draw} · Away: ${primary.away}\n`;
+  if (secondary) {
+    lines += `• Compared with ${secondary.label}: Home ${secondary.home}, Draw ${secondary.draw}, Away ${secondary.away}\n`;
+  }
 
-  return `${BETRIX_HEADER}
+  lines += `\n🔍 *Quick Insight:*\n• Recommendation: *${odds?.recommended || 'Compare markets'}*\n• Confidence: *${odds?.confidence || 'N/A'}*\n\n💡 Tip: Compare multiple bookmakers and look for >10% edge before staking.\nType /analyze <home> vs <away> for a short prediction, or upgrade to VVIP for full reports.`;
 
-💰 *Odds & Quick Analysis*
-
-Match: ${fixtureId || 'Fixture details'}
-
-🏷️ *Odds Snapshot:*
-• Home Win: ${homeOdd}
-• Draw: ${drawOdd}
-• Away Win: ${awayOdd}
-
-🔍 *Quick Insight:*
-• Recommendation: *${odds?.recommended || 'Compare markets'}*
-• Confidence: *${odds?.confidence || 'N/A'}*
-
-💡 Tip: Compare multiple bookmakers and look for >10% edge before staking.
-Type \/analyze <home> vs <away> for a short prediction, or upgrade to VVIP for full reports.`;
+  return lines;
 }
 
 // ============================================================================

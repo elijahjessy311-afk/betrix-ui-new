@@ -8,6 +8,7 @@ import { Logger } from '../utils/logger.js';
 import { CONFIG } from '../config.js';
 
 const logger = new Logger('RawDataCache');
+void CONFIG;
 
 export class RawDataCache {
   constructor(redis = null) {
@@ -175,7 +176,6 @@ export class RawDataCache {
    * Get all available data for a specific match with maximum detail
    */
   async getFullMatchData(matchId) {
-    const sources = ['sportsmonks', 'footballdata'];
     const data = {
       id: matchId,
       sportsmonks: await this.getMatchDetail(matchId, 'sportsmonks'),

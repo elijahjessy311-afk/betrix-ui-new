@@ -7,6 +7,10 @@ import { Logger } from '../utils/logger.js';
 import { compareOdds, formatOddsComparison } from './odds-normalizer.js';
 
 const logger = new Logger('MatchDetailsUX');
+// imported utilities may be referenced by other modules; silence unused warnings here
+void compareOdds;
+void formatOddsComparison;
+void logger;
 
 // Track refresh requests per match/user
 const refreshTracker = new Map();

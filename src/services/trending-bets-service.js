@@ -6,6 +6,7 @@
 import { Logger } from "../utils/logger.js";
 
 const logger = new Logger("TrendingBets");
+void logger;
 
 class TrendingBetsService {
   static TRENDING = [

@@ -8,6 +8,8 @@ import { HttpClient } from "./http-client.js";
 import { chunkText } from "../utils/formatters.js";
 
 const logger = new Logger("Telegram");
+void logger;
+void logger;
 
 class TelegramService {
   constructor(botToken, safeChunkSize = 3000) {

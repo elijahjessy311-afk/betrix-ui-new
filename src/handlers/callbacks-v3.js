@@ -12,9 +12,10 @@ import { handleBettingSitesCallback } from './betting-sites.js';
 // ============================================================================
 
 // Handle payment callbacks (pay_mpesa_signup, pay_paypal_signup, etc)
-async function handlePaymentCallback(data, userId, chatId, redis, services) {
+async function handlePaymentCallback(data, userId, chatId, _redis, _services) {
   try {
-    const { createPaymentOrder, getPaymentInstructions } = await import('./payment-router.js');
+    // Ensure payment-router module is loaded for potential future use
+    await import('./payment-router.js');
     logger.info('handlePaymentCallback routed', { data, userId });
     return {
       chat_id: chatId,
@@ -31,25 +32,25 @@ async function handlePaymentCallback(data, userId, chatId, redis, services) {
   }
 }
 
-export async function handleCallbackQuery(callbackData, userId, chatId, redis, services) {
+export async function handleCallbackQuery(callbackData, userId, chatId, _redis, _services) {
   logger.info('handleCallbackQuery', { callbackData, userId, chatId });
 
   try {
     // Route callback based on prefix
     if (callbackData.startsWith('menu_')) {
-      return await handleMenuCallback(callbackData, userId, chatId, redis);
+      return await handleMenuCallback(callbackData, userId, chatId, _redis);
     }
 
     if (callbackData.startsWith('pay_')) {
-      return await handlePaymentCallback(callbackData, userId, chatId, redis, services);
+      return await handlePaymentCallback(callbackData, userId, chatId, _redis, _services);
     }
 
     if (callbackData.startsWith('vvip_')) {
-      return await handleVVIPCallback(callbackData, userId, chatId, redis);
+      return await handleVVIPCallback(callbackData, userId, chatId, _redis);
     }
 
     if (callbackData.startsWith('sites_') || callbackData.startsWith('pref_')) {
-      return await handleBettingSitesCallback(callbackData, chatId, userId, redis);
+      return await handleBettingSitesCallback(callbackData, chatId, userId, _redis);
     }
 
     if (callbackData.startsWith('help_')) {
@@ -57,23 +58,23 @@ export async function handleCallbackQuery(callbackData, userId, chatId, redis, s
     }
 
     if (callbackData.startsWith('odds_')) {
-      return await handleOddsCallback(callbackData, userId, chatId, redis, services);
+      return await handleOddsCallback(callbackData, userId, chatId, _redis, _services);
     }
 
     if (callbackData.startsWith('analyze_')) {
-      return await handleAnalyzeCallback(callbackData, userId, chatId, redis, services);
+      return await handleAnalyzeCallback(callbackData, userId, chatId, _redis, _services);
     }
 
     if (callbackData.startsWith('news_')) {
-      return await handleNewsCallback(callbackData, userId, chatId, redis, services);
+      return await handleNewsCallback(callbackData, userId, chatId, _redis, _services);
     }
 
     if (callbackData.startsWith('bet_')) {
-      return await handleBettingCallback(callbackData, userId, chatId, redis, services);
+      return await handleBettingCallback(callbackData, userId, chatId, _redis, _services);
     }
 
     if (callbackData.startsWith('signup_')) {
-      return await handleSignupCallback(callbackData, userId, chatId, redis);
+      return await handleSignupCallback(callbackData, userId, chatId, _redis);
     }
 
     logger.warn('Unknown callback', { callbackData });
@@ -296,7 +297,6 @@ async function handleOddsCallback(data, userId, chatId, redis, services) {
   }
 
   if (data === 'odds_toppicks') {
-    const { handleAnalyze } = await import('./commands-v3.js');
     return {
       chat_id: chatId,
       text: `⭐ *Top AI Picks for Today*\n\nOur highest-confidence predictions (70%+):\n\n1. Arsenal vs Chelsea → *Arsenal Win* (75%)\n2. Man United vs Liverpool → *Draw* (72%)\n3. Real Madrid vs Barcelona → *Real Madrid* (73%)\n\nTap on a match to see full analysis!`,
@@ -314,7 +314,7 @@ async function handleOddsCallback(data, userId, chatId, redis, services) {
 // ANALYZE CALLBACKS
 // ============================================================================
 
-async function handleAnalyzeCallback(data, userId, chatId, redis, services) {
+async function handleAnalyzeCallback(data, userId, chatId, _redis, _services) {
   logger.info('handleAnalyzeCallback', { data });
 
   if (data.startsWith('analyze_why_')) {
@@ -342,7 +342,7 @@ async function handleAnalyzeCallback(data, userId, chatId, redis, services) {
 // NEWS CALLBACKS
 // ============================================================================
 
-async function handleNewsCallback(data, userId, chatId, redis, services) {
+async function handleNewsCallback(data, userId, chatId, _redis, _services) {
   logger.info('handleNewsCallback', { data });
 
   const newsCategories = {
@@ -376,7 +376,7 @@ async function handleNewsCallback(data, userId, chatId, redis, services) {
 // BETTING CALLBACKS
 // ============================================================================
 
-async function handleBettingCallback(data, userId, chatId, redis, services) {
+async function handleBettingCallback(data, userId, chatId, _redis, _services) {
   logger.info('handleBettingCallback', { data });
 
   if (data.startsWith('bet_fixture_')) {

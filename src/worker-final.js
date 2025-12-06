@@ -62,6 +62,7 @@ import brandingUtils from "./utils/betrix-branding.js";
 import perfUtils from "./utils/performance-optimizer.js";
 
 const logger = new Logger("FinalWorker");
+void logger;
 
 try {
   validateConfig();

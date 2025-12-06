@@ -7,6 +7,7 @@
 import { CONFIG } from '../config.js';
 import { Logger } from '../utils/logger.js';
 const logger = new Logger('StartupInitializer');
+void CONFIG;
 
 class StartupInitializer {
   constructor(redis = null) {

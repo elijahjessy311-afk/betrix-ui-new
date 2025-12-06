@@ -118,7 +118,7 @@ export class MatchFormatter {
       return '📅 No upcoming fixtures';
     }
 
-    const message = '📅 UPCOMING FIXTURES:\n\n' +
+    let message = '📅 UPCOMING FIXTURES:\n\n' +
       fixtures.slice(0, 10).map((f, i) => 
         `${i + 1}. ${this.formatFixture(f)}`
       ).join('\n\n');
@@ -149,7 +149,7 @@ export class MatchFormatter {
       return '📊 No odds available';
     }
 
-    const message = '📊 LIVE ODDS:\n\n' +
+    let message = '📊 LIVE ODDS:\n\n' +
       oddsArray.slice(0, 5).map((o, i) =>
         `${i + 1}. ${this.formatOdds(o)}`
       ).join('\n\n');

@@ -2,6 +2,7 @@ import { Logger } from './src/utils/logger.js';
 import { SportsAggregator } from './src/services/sports-aggregator.js';
 
 const logger = new Logger('LiveFlowTest');
+void logger;
 
 async function testLiveFlow() {
   try {

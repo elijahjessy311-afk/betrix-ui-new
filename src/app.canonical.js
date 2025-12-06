@@ -8,7 +8,7 @@ import { createClient } from 'redis';
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
 
-function safeLog(...args) { try { console.log(...args); } catch (e) { /* ignore */ } }
+function safeLog(...args) { try { console.log(...args); } catch (e) { void e; } }
 
 app.use(bodyParser.json({ limit: '5mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
 

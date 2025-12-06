@@ -45,7 +45,7 @@ async function fetchWithRetry(url, attempts = 3) {
  * Scrape Flashscore for live matches (requires JavaScript rendering for best results)
  * Fallback: parse static HTML elements
  */
-export async function getLiveMatchesFromFlashscore(sport = 'soccer') {
+export async function getLiveMatchesFromFlashscore(_sport = 'soccer') {
   try {
     // Flashscore main page; typically has live matches
     const url = 'https://www.flashscore.com/';

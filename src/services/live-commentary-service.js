@@ -6,6 +6,7 @@
 import { Logger } from "../utils/logger.js";
 
 const logger = new Logger("Commentary");
+void logger;
 
 class LiveCommentaryService {
   static EVENTS = [

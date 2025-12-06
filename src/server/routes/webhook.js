@@ -1,6 +1,4 @@
 
-// Diagnostic: safe parse guard for webhook payloads
-function safeJson(req) { try { return req.body } catch(e) { try { return JSON.parse(req.rawBody || req.bodyRaw || '{}') } catch(_) { console.error('WEBHOOK_RAW_PAYLOAD', req.rawBody || req.bodyRaw || req.body); return null } } }
 const express = require('express');
 const router = express.Router();
 const { handleTelegram } = require('../handlers/telegram');

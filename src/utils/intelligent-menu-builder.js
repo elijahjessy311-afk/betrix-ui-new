@@ -6,6 +6,7 @@
 import { Logger } from '../utils/logger.js';
 
 const logger = new Logger('IntelligentMenuBuilder');
+void logger;
 
 export class IntelligentMenuBuilder {
   constructor(redisClient) {
@@ -175,6 +176,7 @@ export class IntelligentMenuBuilder {
    * Build match detail menu with all actions
    */
   buildMatchDetailMenu(matchId, leagueId, userTier = 'FREE', hasOdds = true) {
+    void hasOdds;
     const actions = [];
 
     // AI Analysis (VVIP only)
