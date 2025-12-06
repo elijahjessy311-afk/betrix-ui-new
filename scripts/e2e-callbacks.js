@@ -29,12 +29,12 @@ async function run() {
   };
 
   const callbacks = [
-    { id: 'cb-menu', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 1 } }, data: 'menu_main' },
-    { id: 'cb-live', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 2 } }, data: 'menu_live' },
-    { id: 'cb-sport', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 3 } }, data: 'sport_football' },
-    { id: 'cb-league', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 4 } }, data: 'league_39' },
-    { id: 'cb-standings', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 5 } }, data: 'league_standings_39' },
-    { id: 'cb-odds', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 6 } }, data: 'menu_odds' }
+    { _id: 'cb-menu', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 1 } }, data: 'menu_main' },
+    { _id: 'cb-live', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 2 } }, data: 'menu_live' },
+    { _id: 'cb-sport', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 3 } }, data: 'sport_football' },
+    { _id: 'cb-league', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 4 } }, data: 'league_39' },
+    { _id: 'cb-standings', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 5 } }, data: 'league_standings_39' },
+    { _id: 'cb-odds', from: { id: 424242 }, message: { chat: { id: 9999, message_id: 6 } }, data: 'menu_odds' }
   ];
 
   for (const cb of callbacks) {

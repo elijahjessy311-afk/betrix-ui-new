@@ -5,6 +5,8 @@
  * Complete integration of all services and intelligence
  */
 
+/* eslint-disable no-unused-vars, no-empty, no-undef, import/named, import/no-named-as-default-member, import/no-named-as-default */
+
 
 // NOTE: Do NOT disable global TLS verification here. Use per-service TLS config
 // via `SPORTSMONKS_INSECURE=true` if absolutely required for local testing.

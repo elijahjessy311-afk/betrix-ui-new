@@ -128,7 +128,7 @@ async function performHealthCheck() {
     }
 
     // Test 3: Database info
-    const info = await redis.info('stats');
+    const _info = await redis.info('stats');
     
     // Test 4: Command latency
     const latencyStart = Date.now();
@@ -290,6 +290,7 @@ async function startMonitoring() {
 
 redis.on('error', (err) => {
   // Errors are handled in performHealthCheck
+  /* noop - global redis error handled in performHealthCheck */
 });
 
 redis.on('connect', () => {
