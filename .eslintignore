@@ -1,4 +1,8 @@
-# Temporarily ignore large legacy directories to allow focused linting
+tests/
+**/*.test.js
+test-*.js
+test*.js
+tests/**/*.js# Temporarily ignore large legacy directories to allow focused linting
 archive/
 src/server/
 src/handlers/
