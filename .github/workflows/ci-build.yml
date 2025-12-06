@@ -32,7 +32,7 @@ jobs:
           echo "Starting container $CONTAINER_NAME with -p ${PORT}:${PORT} and HOST=0.0.0.0"
           # Start container and keep it alive while the server runs so we can inspect logs.
           docker run --rm -d --name "$CONTAINER_NAME" -p ${PORT}:${PORT} -v "$WORKDIR":"$WORKDIR":rw -w "$WORKDIR" -e PORT=${PORT} -e HOST=0.0.0.0 node:22 \
-            bash -lc "npm ci --silent 2>&1 | tee /tmp/npmci.log || true; if npm run | grep -q build; then npm run build 2>&1 | tee -a /tmp/npmci.log || true; fi; echo starting server; PORT=${PORT} COMMIT_SHA=${COMMIT_SHA} HOST=0.0.0.0 node server.js > server.log 2>&1 & sleep 1; tail -n +1 -f server.log" || true
+            bash -lc "npm ci --silent 2>&1 | tee /tmp/npmci.log || true; if npm run | grep -q build; then npm run build 2>&1 | tee -a /tmp/npmci.log || true; fi; echo starting server; PORT=${PORT} COMMIT_SHA=${COMMIT_SHA} HOST=0.0.0.0 npm run start > server.log 2>&1 & sleep 1; tail -n +1 -f server.log" || true
 
           # Give the container a bit more time to finish setup and start the server
           sleep 10
