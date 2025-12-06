@@ -50,6 +50,6 @@ async function sendTelegram(token, chatId, text) {
     console.error('Monitor failed:', e);
     process.exit(2);
   } finally {
-    try { redis.disconnect(); } catch (ex) {}
+    try { redis.disconnect(); } catch (ex) { void ex; }
   }
 })();

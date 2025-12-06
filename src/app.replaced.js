@@ -1,7 +1,7 @@
-import express from '"'"'express'"'"';
-import bodyParser from '"'"'body-parser'"'"';
-import crypto from '"'"'crypto'"'"';
-import { Pool } from '"'"'pg'"'"';
+import express from 'express';
+import bodyParser from 'body-parser';
+import crypto from 'crypto';
+import { Pool } from 'pg';
 
 // Minimal replacement app to restore runtime while we repair the original file.
 const app = express();
@@ -13,7 +13,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejec
 // Middleware: capture raw body for HMAC verification
 app.use(bodyParser.json({ limit: '5mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
-function safeLog(...args) { try { console.log(...args); } catch (e) {} }
+function safeLog(...args) { try { console.log(...args); } catch (e) { void e; } }
 
 // Simple admin endpoint for status
 app.get('/admin/queue', (req, res) => {
@@ -33,8 +33,8 @@ app.post('/webhook/mpesa', async (req, res) => {
       computedHex = h.toString('hex');
       computedB64 = h.toString('base64');
     }
-
     safeLog('[webhook/mpesa] incomingSig=', incoming, 'computedHexPrefix=', computedHex ? computedHex.slice(0,16) : null);
+    void computedB64;
 
     // Attempt to persist webhook (best-effort)
     try {

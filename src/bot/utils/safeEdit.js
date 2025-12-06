@@ -29,7 +29,7 @@ export async function safeEdit(ctx, newText, newMarkup) {
     const msg = String(err?.description || err?.message || err || '');
     const isNotModified = msg.includes('message is not modified') || msg.includes('Bad Request: message is not modified');
     if (isNotModified) {
-      try { if (ctx && typeof ctx.answerCbQuery === 'function') await ctx.answerCbQuery('Already up to date ✅', { show_alert: false }); } catch (_) {}
+      try { if (ctx && typeof ctx.answerCbQuery === 'function') await ctx.answerCbQuery('Already up to date ✅', { show_alert: false }); } catch (_) { void _; }
       return;
     }
 
@@ -40,9 +40,7 @@ export async function safeEdit(ctx, newText, newMarkup) {
           await ctx.reply(newText, { reply_markup: newMarkup });
           return;
         }
-      } catch (e) {
-        // fallthrough
-      }
+      } catch (e) { void e; }
     }
 
     // Unexpected: rethrow so callers can log

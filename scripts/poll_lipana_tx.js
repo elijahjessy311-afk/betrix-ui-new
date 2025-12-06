@@ -12,11 +12,9 @@ if (!REF) { console.error('REFERENCE required'); process.exit(2); }
 
 async function query() {
   const url = `${API_BASE}/v1/transactions?reference=${encodeURIComponent(REF)}`;
-  try {
-    const res = await fetch(url, { headers: { 'x-api-key': KEY }, timeout: 10000 });
-    const j = await res.json();
-    return j;
-  } catch (e) { throw e; }
+  const res = await fetch(url, { headers: { 'x-api-key': KEY }, timeout: 10000 });
+  const j = await res.json();
+  return j;
 }
 
 async function poll() {

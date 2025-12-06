@@ -1,6 +1,6 @@
 import { getEspnLiveMatches } from '../src/services/espn-provider.js';
 import { getNewsHeadlines } from '../src/services/news-provider.js';
-import { getOddsFromBetExplorer, getOddsFromOddsPortal } from '../src/services/odds-scraper.js';
+import { getOddsFromBetExplorer } from '../src/services/odds-scraper.js';
 
 async function run() {
   console.log('=== Testing Live Sports Data Sources ===\n');

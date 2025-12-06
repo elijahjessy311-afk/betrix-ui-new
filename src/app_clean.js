@@ -1,7 +1,7 @@
 // Minimal clean Express app used by worker during deploy recovery
 import express from 'express';
 import bodyParser from 'body-parser';
-import DataExposureHandler from './handlers/data-exposure-handler.js';
+import { DataExposureHandler } from './handlers/data-exposure-handler.js';
 
 process.env.PGSSLMODE = process.env.PGSSLMODE || 'require';
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED || '0';

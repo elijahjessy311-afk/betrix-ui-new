@@ -1,18 +1,17 @@
 import 'dotenv/config';
-import { Telegraf, Scenes, session, Markup } from 'telegraf';
+import { Telegraf, session, Markup } from 'telegraf';
 import express from 'express';
 import bodyParser from 'body-parser';
-import { Pool } from 'pg';
-import { upsertUser, createPayment, getUserById, getRecentPayments, getPaymentByProviderCheckout, getPaymentByTxRef, updatePaymentStatus } from './db.js';
+import { upsertUser, getUserById, getRecentPayments, getPaymentByProviderCheckout, getPaymentByTxRef, updatePaymentStatus } from './db.js';
 import { initiateStkPush, handleMpesaCallback } from './payments.js';
-import football, { setAggregator } from './football.js';
+import * as football from './football.js';
 import { getRedis } from '../../src/lib/redis-factory.js';
 import { SportsAggregator } from '../../src/services/sports-aggregator.js';
 
 // Initialize a SportsAggregator instance (shared Redis)
 const redisClient = getRedis();
 const sportsAgg = new SportsAggregator(redisClient);
-setAggregator(sportsAgg);
+football.setAggregator(sportsAgg);
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!BOT_TOKEN) {
@@ -35,6 +34,7 @@ function mainKeyboard() {
     [Markup.button.callback('💳 Pay 300 KES', 'pay:start')]
   ]);
 }
+void mainKeyboard;
 
 function payKeyboard() {
   return Markup.inlineKeyboard([
@@ -77,7 +77,6 @@ bot.action('pay:method:lipana', async (ctx) => {
   ctx.session.paymentMethod = 'lipana';
   await ctx.reply('You chose Lipana M-Pesa. We will use M-Pesa STK to collect 300 KES.');
   // trigger payment flow
-  const fakeCtx = ctx; // reuse same ctx
   await (async function trigger() {
     const userId = ctx.from.id;
     let msisdn = ctx.session?.msisdn || null;
@@ -134,23 +133,11 @@ bot.action('pay:method:mpesa', async (ctx) => {
     await ctx.reply('Failed to initiate payment. Please try again later.');
   }
 });
-  }
-  const lines = [ `⚽ BETRIX • Upcoming Fixtures (showing ${items.length} of ${total})` ];
-  const kb = [];
-  for (const m of items) {
-    lines.push('• ' + football.formatMatchShort(m));
-    const id = m.id ?? m.match_id ?? m.fixture?.id ?? m.home?.id + ':' + m.away?.id;
-    kb.push([Markup.button.callback('Details', `match:${id}:football`)]);
-  }
-  kb.push([Markup.button.callback('🔙 Back', 'sport:football')]);
-  await ctx.editMessageText(lines.join('\n'), { reply_markup: Markup.inlineKeyboard(kb).reply_markup });
-});
-
 // Match details handler (best-effort id lookup)
 bot.action(/match:(.+):football/, async (ctx) => {
   await ctx.answerCbQuery();
   const matchId = ctx.match[1];
-  const all = await football.loadMatches();
+  const all = await football.getLiveMatches();
   const found = all.find(m => String(m.id) === String(matchId) || String(m.match_id) === String(matchId) || String(m.fixture?.id) === String(matchId) || (`${m.home?.id || ''}:${m.away?.id || ''}`) === String(matchId));
   if (!found) {
     await ctx.editMessageText(`Match not found. Showing list instead.`, { reply_markup: Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'sport:football')]]).reply_markup });
@@ -391,6 +378,7 @@ app.post('/webhook/mpesa', async (req, res) => {
       const checkout = stk.CheckoutRequestID;
       const resultCode = stk.ResultCode;
       const resultDesc = stk.ResultDesc || stk.ResultDescription || null;
+      void resultDesc;
       // find payment by provider checkout id
       const payment = await getPaymentByProviderCheckout(checkout);
       if (!payment) {

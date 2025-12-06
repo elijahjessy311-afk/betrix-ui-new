@@ -1,6 +1,6 @@
 import { createPayment, updatePaymentStatus } from './db.js';
 import { v4 as uuidv4 } from 'uuid';
-import mpesa from './mpesa.js';
+import { stkPush } from './mpesa.js';
 import lipana from '../lib/lipana-client.js';
 
 // Local M-Pesa STK push helper (stubbed). Creates a pending payment record
@@ -39,7 +39,7 @@ export async function initiateStkPush({ user_id, msisdn, amount = 300 }) {
   // If MPESA env is configured, attempt a real STK push.
   if (process.env.MPESA_CONSUMER_KEY && process.env.MPESA_CONSUMER_SECRET) {
     try {
-      const resp = await mpesa.stkPush({ amount, phone: msisdn });
+      const resp = await stkPush({ amount, phone: msisdn });
       // record provider checkout id if present
       const checkout = resp?.raw?.CheckoutRequestID || resp?.raw?.MerchantRequestID || null;
       if (checkout) {
