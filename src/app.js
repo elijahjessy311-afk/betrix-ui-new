@@ -96,6 +96,30 @@ app.post('/webhook/mpesa', async (req, res) => {
   }
 });
 
+// Allow workers to register data-exposure endpoints without failing
+// The worker imports `registerDataExposureAPI` from this module; provide
+// a safe implementation that dynamically loads the handler if available.
+export function registerDataExposureAPI(sportsAggregator) {
+  (async () => {
+    try {
+      const mod = await import('./handlers/data-exposure-handler.js').catch(() => null);
+      const DataExposureHandler = mod && (mod.default || mod.DataExposureHandler);
+      if (DataExposureHandler) {
+        try {
+          new DataExposureHandler(app, sportsAggregator);
+          safeLog('DATA_EXPOSURE: registered');
+        } catch (err) {
+          safeLog('DATA_EXPOSURE registration failed:', String(err));
+        }
+      } else {
+        safeLog('DATA_EXPOSURE: handler module not found; skipping registration');
+      }
+    } catch (e) {
+      safeLog('DATA_EXPOSURE registration failed:', String(e));
+    }
+  })();
+}
+
 // Single PORT binding and listen
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
