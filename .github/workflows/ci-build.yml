@@ -10,7 +10,8 @@ jobs:
   build-and-smoke:
     runs-on: ubuntu-latest
     env:
-      PORT: (process.env.PORT || (process.env.PORT || 10000))
+      # Ensure PORT is a numeric value for Docker - use 10000 as a safe default
+      PORT: 10000
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +24,8 @@ jobs:
         run: |
           set -euo pipefail
           WORKDIR=$GITHUB_WORKSPACE
-          PORT=${PORT:-(process.env.PORT || (process.env.PORT || 10000))}
+          # Use numeric default for PORT when not provided
+          PORT=${PORT:-10000}
           COMMIT_SHA=${COMMIT_SHA:-$(git rev-parse --short HEAD)}
           CONTAINER_NAME="betrix-smoke-pub-${GITHUB_RUN_ID:-local}"
 
