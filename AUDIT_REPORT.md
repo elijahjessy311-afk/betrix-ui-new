@@ -61,4 +61,17 @@ Contact
 For follow-up, assign to the repository maintainer or the person who requested this audit.
 
 
+8) Runtime Verification — Reconciler
+-----------------------------------
+- Reconciler run: executed `node scripts/reconcile_pending.js` as a one-shot reconciliation pass to exercise downstream flows (logging, notifications, DB updates).
+- Result: the run failed due to a missing `payments` relation in the configured database. Error observed: `Fatal error: relation "payments" does not exist` (Postgres error `42P01`).
+	- Implication: the local environment does not have the application's schema/migrations applied. The reconciler logic executed correctly but could not operate without the `payments` table.
+	- Next step: run migrations or point the script to a staging database with the schema present to fully verify transitions and admin notifications. Alternatively, run the reconciler in a controlled integration environment where Lipana and the DB are populated.
+
+Appendix: Command and output excerpt
+-----------------------------------
+- Command: `node scripts/reconcile_pending.js`
+- Key excerpt: `Fatal error: relation "payments" does not exist` (Postgres `42P01`)
+
+
 
