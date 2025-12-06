@@ -146,6 +146,7 @@ async function performHealthCheck() {
       timestamp: new Date().toISOString(),
       responseTime: `${responseTime}ms`,
       latency: `${latency}ms`,
+      rawInfo: _info,
       tests: {
         ping: 'PASS',
         getset: 'PASS',
@@ -288,7 +289,7 @@ async function startMonitoring() {
 // EVENT HANDLERS
 // ============================================================================
 
-redis.on('error', (err) => {
+redis.on('error', () => {
   // Errors are handled in performHealthCheck
   /* noop - global redis error handled in performHealthCheck */
 });

@@ -25,7 +25,7 @@ async function run() {
     openLiga: { getRecentMatches: async () => [] },
     footballData: { fixturesFromCsv: async () => ({ fixtures: [] }) },
     rss: { fetchMultiple: async () => [] },
-    apiFootball: { getFixture: async (id) => ({ response: [] }) }
+    apiFootball: { getFixture: async () => ({ response: [] }) }
   };
 
   const callbacks = [

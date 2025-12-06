@@ -8,9 +8,7 @@
  */
 
 import { CONFIG } from './src/config.js';
-import { Logger } from './src/utils/logger.js';
-
-const logger = new Logger('APIKeyVerification');
+// Logger not required for this quick check script
 
 console.log('\n🔐 API KEYS CHECK (SPORTMONKS + FOOTBALL-DATA)\n');
 console.log('='.repeat(60));

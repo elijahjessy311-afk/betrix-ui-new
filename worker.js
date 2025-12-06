@@ -229,6 +229,7 @@ async function handleCommand(chatId, text) {
 
 // --- Worker loop ---
 async function workerLoop() {
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       const jobRaw = await redis.lpop('telegram-jobs');

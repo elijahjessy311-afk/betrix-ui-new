@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars, no-empty, import/no-named-as-default-member */
 import 'dotenv/config';
 import { Telegraf, Scenes, session, Markup } from 'telegraf';
 import express from 'express';

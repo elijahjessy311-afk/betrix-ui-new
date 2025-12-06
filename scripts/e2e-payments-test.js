@@ -88,7 +88,7 @@ async function runPaymentTest() {
     if (paymentResponse && paymentResponse.text) {
       console.log(`✓ Payment order created successfully`);
       console.log(`  Response text preview: ${paymentResponse.text.substring(0, 80)}...`);
-    } else if (paymentResponse && paymentResponse.method === 'answerCallbackQuery' && paymentResponse.text) {
+    } else if (paymentResponse && paymentResponse.method === 'answerCallbackQuery') {
       console.log(`⚠️  Alert: ${paymentResponse.text}`);
     } else {
       console.log('❌ Unexpected response:', paymentResponse);
