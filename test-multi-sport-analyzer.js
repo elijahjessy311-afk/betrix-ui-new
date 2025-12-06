@@ -6,7 +6,7 @@
  */
 
 import Redis from 'ioredis';
-import SportsAggregator from './src/services/sports-aggregator.js';
+import { SportsAggregator } from './src/services/sports-aggregator.js';
 import { MultiSportAnalyzer } from './src/services/multi-sport-analyzer.js';
 import { CONFIG } from './src/config.js';
 

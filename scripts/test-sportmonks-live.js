@@ -5,7 +5,7 @@
 
 import Redis from 'ioredis';
 import { CONFIG } from '../src/config.js';
-import SportsAggregator from '../src/services/sports-aggregator.js';
+import { SportsAggregator } from '../src/services/sports-aggregator.js';
 import v2Handler from '../src/handlers/telegram-handler-v2-clean.js';
 import { Logger } from '../src/utils/logger.js';
 

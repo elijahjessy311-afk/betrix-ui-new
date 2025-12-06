@@ -1,4 +1,4 @@
-import SportsAggregator from '../../services/sports-aggregator.js';
+import { SportsAggregator } from '../../services/sports-aggregator.js';
 
 export async function analyse_match(ctx, matchId) {
   try {

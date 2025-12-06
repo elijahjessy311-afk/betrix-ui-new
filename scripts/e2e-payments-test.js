@@ -38,7 +38,7 @@ class MockRedis {
   async ttl(key) { return -1; }
 }
 
-import v2Handler from '../src/handlers/telegram-handler-v2.js';
+import { handleCallbackQuery } from '../src/handlers/telegram-handler-v2.js';
 
 const redis = new MockRedis();
 
@@ -51,7 +51,7 @@ async function runPaymentTest() {
 
   // Test 1: Tier selection (sub_vvip)
   console.log('--- Test 1: Selecting VVIP tier (sub_vvip) ---');
-  const tierResponse = await v2Handler.handleCallbackQuery(
+  const tierResponse = await handleCallbackQuery(
     {
       id: 'cb_001',
       from: { id: userId },
@@ -74,7 +74,7 @@ async function runPaymentTest() {
   // Test 2: Payment method selection (pay_mpesa_vvip)
   console.log('\n--- Test 2: Selecting M-Pesa payment (pay_mpesa_vvip) ---');
   try {
-    const paymentResponse = await v2Handler.handleCallbackQuery(
+    const paymentResponse = await handleCallbackQuery(
       {
         id: 'cb_002',
         from: { id: userId },
@@ -100,7 +100,7 @@ async function runPaymentTest() {
   // Test 3: Payment method selection with invalid method (should fail gracefully)
   console.log('\n--- Test 3: Selecting invalid payment (pay_invalid_vvip) ---');
   try {
-    const invalidResponse = await v2Handler.handleCallbackQuery(
+    const invalidResponse = await handleCallbackQuery(
       {
         id: 'cb_003',
         from: { id: userId },
@@ -123,7 +123,7 @@ async function runPaymentTest() {
   // Test 4: Different tier (sub_pro)
   console.log('\n--- Test 4: Selecting PRO tier (sub_pro) ---');
   try {
-    const proResponse = await v2Handler.handleCallbackQuery(
+    const proResponse = await handleCallbackQuery(
       {
         id: 'cb_004',
         from: { id: userId },

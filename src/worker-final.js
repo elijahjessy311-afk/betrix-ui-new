@@ -34,7 +34,7 @@ import RSSAggregator from "./services/rss-aggregator.js";
 import FootballDataService from "./services/footballdata.js";
 import ScoreBatService from "./services/scorebat-enhanced.js";
 import Scrapers from "./services/scrapers.js";
-import SportsAggregator from "./services/sports-aggregator.js";
+import { SportsAggregator } from "./services/sports-aggregator.js";
 import OddsAnalyzer from "./services/odds-analyzer.js";
 import { MultiSportAnalyzer } from "./services/multi-sport-analyzer.js";
 import { startPrefetchScheduler } from "./tasks/prefetch-scheduler.js";

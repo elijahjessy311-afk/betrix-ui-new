@@ -2,7 +2,7 @@
  * Test: OpenLiga normalization + ScoreBat retry/cache
  */
 
-import SportsAggregator from './src/services/sports-aggregator.js';
+import { SportsAggregator } from './src/services/sports-aggregator.js';
 import ScoreBatService from './src/services/scorebat-enhanced.js';
 import CacheService from './src/services/cache.js';
 import OpenLigaDBService from './src/services/openligadb.js';
