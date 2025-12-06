@@ -135,7 +135,9 @@ bot.action('pay:method:mpesa', async (ctx) => {
     await ctx.reply('Failed to initiate payment. Please try again later.');
   }
 });
-  }
+bot.action('sport:football', async (ctx) => {
+  await ctx.answerCbQuery?.();
+  const { items, total } = await football.getUpcomingFixtures({ page: 1, perPage: 10 });
   const lines = [ `⚽ BETRIX • Upcoming Fixtures (showing ${items.length} of ${total})` ];
   const kb = [];
   for (const m of items) {

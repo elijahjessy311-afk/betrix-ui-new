@@ -18,7 +18,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejec
 // Capture raw body bytes for HMAC verification
 app.use(bodyParser.json({ limit: '5mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
-function safeLog(...args) { try { console.log(...args); } catch (e) {} }
+function safeLog(...args) { try { console.log(...args); } catch (e) { console.warn('safeLog error', String(e)); } }
 
 app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
 
@@ -100,6 +100,12 @@ app.post('/webhook/mpesa', async (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  // start auxiliary realtime WS server (runs on PORT+1 by default)
+  try {
+    import('./services/realtime.js').then(mod => mod.startRealtimeServer()).catch(err => console.warn('Realtime import failed', err?.message || err));
+  } catch (e) {
+    console.warn('Could not start realtime server:', e?.message || e);
+  }
 });
 
 export default app;
