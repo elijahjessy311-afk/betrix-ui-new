@@ -10,7 +10,7 @@ async function main() {
   if (redisUrl) {
     redis = new IORedis(redisUrl);
     // allow connection
-    try { await redis.connect(); } catch (_) {}
+    try { await redis.connect(); } catch (_) { /* ignore connection errors in local test */ }
   }
 
   const agg = new SportsAggregator(redis);

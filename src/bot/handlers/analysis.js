@@ -1,4 +1,3 @@
-import axios from 'axios';
 import SportsAggregator from '../../services/sports-aggregator.js';
 
 export async function analyse_match(ctx, matchId) {

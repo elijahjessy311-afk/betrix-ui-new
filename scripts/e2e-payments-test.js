@@ -4,6 +4,7 @@
  * Tests the payment flow: tier selection -> payment method selection -> payment order
  */
 
+/* eslint-disable no-unused-vars */
 
 // Minimal in-memory Redis mock for local testing
 class MockRedis {

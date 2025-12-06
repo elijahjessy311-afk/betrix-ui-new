@@ -7,6 +7,8 @@
 // Force modules to use mock redis during this simulation to avoid noisy ioredis auth attempts
 process.env.USE_MOCK_REDIS = process.env.USE_MOCK_REDIS || '1';
 
+/* eslint-disable no-unused-vars */
+
 // Minimal in-memory Redis mock used for local e2e when real Redis is unavailable
 class MockRedis {
   constructor() {

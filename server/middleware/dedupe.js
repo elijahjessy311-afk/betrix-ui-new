@@ -1,76 +1,64 @@
-﻿/*
- server/middleware/dedupe.js
- Simple dedupe middleware using Redis SET NX EX.
-/* explicit dedupe init: converted to dedupeMod for deterministic startup */
-const dedupeMod = require('./server/middleware/dedupe');
-app.use(dedupeMod(60));
-if (typeof dedupeMod.init === 'function') dedupeMod.init().catch(err => console.warn('[dedupe] init error', err && err.message));
- Usage: const dedupe = require('./server/middleware/dedupe'); app.use(dedupe(60));
- Reads REDIS_URL from env. Safe no-op if Redis not configured or fails to connect.
-*/
+﻿/**
+ * server/middleware/dedupe.js
+ * Minimal dedupe middleware using redis SET NX EX. Safe no-op when Redis not configured.
+ */
 const crypto = require('crypto');
+
 let redisClient = null;
 let redisReady = false;
 
-function safeLog(...args){ try { console.warn('[dedupe]', ...args) } catch(e){} }
+function safeLog(...args) { try { console.warn('[dedupe]', ...args); } catch (e) { /* ignore */ } }
 
-async function getRedisClient(){
-  if(redisClient) return redisClient;
+async function initRedis() {
+  if (redisClient) return redisClient;
   const url = process.env.REDIS_URL || process.env.REDIS || null;
-  if(!url){
-    safeLog('No REDIS_URL configured — dedupe will be disabled.');
+  if (!url) {
+    safeLog('No REDIS_URL configured — dedupe disabled');
     return null;
   }
   try {
     const { createClient } = require('redis');
-    redisClient = createClient({ url });
-    redisClient.on('error', (err) => { safeLog('redis error', err && err.message ? err.message : err); redisReady = false; });
-    await redisClient.connect();
+    const client = createClient({ url });
+    client.on('error', (err) => { safeLog('redis error', err && err.message ? err.message : err); redisReady = false; });
+    await client.connect();
+    redisClient = client;
     redisReady = true;
     safeLog('Connected to Redis for dedupe');
     return redisClient;
   } catch (e) {
-    safeLog('Failed to connect to Redis:', e && e.message ? e.message : e);
+    safeLog('Failed to connect to Redis for dedupe:', e && e.message ? e.message : e);
     redisClient = null;
     redisReady = false;
     return null;
   }
 }
 
-module.exports = function dedupe(ttlSeconds = 60){
-  // ttlSeconds: how long to consider duplicates (default 60s)
-  // returns express middleware
-  getRedisClient().catch(()=>{}); // attempt async connect early, don't block startup
+module.exports = function dedupe(ttlSeconds = 60) {
+  // attempt async init but don't block
+  initRedis().catch(() => {});
 
-  return async function (req, res, next){
+  return async function (req, res, next) {
     try {
-      // only dedupe POST/PUT/PATCH (idempotent methods typically excluded)
-      const method = (req.method || '').toUpperCase();
-      if(!['POST','PUT','PATCH'].includes(method)) return next();
+      const method = String(req.method || '').toUpperCase();
+      if (!['POST', 'PUT', 'PATCH'].includes(method)) return next();
 
-      // If Redis is not ready, allow requests through (fail-open)
-      if(!redisReady || !redisClient){
-        return next();
-      }
+      if (!redisReady || !redisClient) return next(); // fail-open
 
-      // create a request fingerprint: method + path + body hash + (optional) auth header short
       const bodyStr = (req.body && typeof req.body === 'object') ? JSON.stringify(req.body) : String(req.body || '');
-      const authHint = (req.headers && req.headers.authorization) ? req.headers.authorization.slice(0,16) : '';
-      const raw = ${method}|||;
+      const authHint = (req.headers && req.headers.authorization) ? String(req.headers.authorization).slice(0, 16) : '';
+      const raw = `${method}|${req.originalUrl || req.url}|${bodyStr}|${authHint}`;
       const hash = crypto.createHash('sha256').update(raw).digest('hex');
-      const key = dedupe:;
+      const key = `dedupe:${hash}`;
 
-      // try to set the key with NX and expiry; if set returns 'OK' then this is first request
-      const setResult = await redisClient.set(key, Date.now().toString(), { NX: true, EX: Math.max(1, parseInt(ttlSeconds,10) || 60) });
-      if(setResult === 'OK' || setResult === true){
-        return next();
-      } else {
-        // duplicate detected
-        res.status(429).json({ ok:false, error: "Duplicate request", code: "DUPLICATE_REQUEST" });
-        return;
-      }
-    } catch (err){
-      // on any internal error, fail-open (so we don't block traffic) but log
+      const ttl = Math.max(1, parseInt(ttlSeconds, 10) || 60);
+      // NX true -> set only if not exists; EX sets expiry seconds
+      const setResult = await redisClient.set(key, Date.now().toString(), { NX: true, EX: ttl });
+      if (setResult === 'OK' || setResult === true) return next();
+
+      // duplicate
+      res.status(429).json({ ok: false, error: 'Duplicate request', code: 'DUPLICATE_REQUEST' });
+      return;
+    } catch (err) {
       safeLog('dedupe middleware error:', err && err.message ? err.message : err);
       return next();
     }
