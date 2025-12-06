@@ -86,6 +86,66 @@ class MockRedis {
 
   async ping() { return 'PONG'; }
 
+  // Provide expiry semantics used by worker (best-effort; no real timer eviction)
+  async expire(key, _seconds) {
+    // noop for in-memory mock; return 1 to indicate key exists/was set for TTL
+    return this.kv.has(key) ? 1 : 0;
+  }
+
+  async ttl(_key) {
+    // no TTL tracking in this simple mock
+    return -1;
+  }
+
+  // Pop from (right) source and push to left of destination (non-blocking)
+  async rpoplpush(source, dest) {
+    const src = this.kv.get(source) || [];
+    if (!src.length) return null;
+    const v = src.pop();
+    this.kv.set(source, src);
+    const dst = this.kv.get(dest) || [];
+    dst.unshift(v);
+    this.kv.set(dest, dst);
+    return v;
+  }
+
+  // Blocking variant used in worker; here we implement a non-blocking best-effort
+  // signature: brpoplpush(source, dest, timeoutSeconds)
+  async brpoplpush(source, dest, timeoutSeconds = 0) {
+    // Try immediate rpoplpush; if nothing, wait up to timeout in 100ms intervals
+    const attempt = () => {
+      const src = this.kv.get(source) || [];
+      if (src.length) {
+        const v = src.pop();
+        this.kv.set(source, src);
+        const dst = this.kv.get(dest) || [];
+        dst.unshift(v);
+        this.kv.set(dest, dst);
+        return v;
+      }
+      return null;
+    };
+
+    let elapsed = 0;
+    const interval = 100;
+    const max = Math.max(0, Number(timeoutSeconds) * 1000);
+    let res = attempt();
+    while (res === null && elapsed < max) {
+      // sleep synchronously via Promise
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, interval));
+      elapsed += interval;
+      res = attempt();
+    }
+    return res;
+  }
+
+  // Pub/sub noop: return 0 subscribers
+  async publish(_channel, _message) {
+    // No real pub/sub in mock — noop
+    return 0;
+  }
+
 }
 
 export function getRedis(opts = {}) {
