@@ -47,10 +47,11 @@ jobs:
           docker exec "$CONTAINER_NAME" sh -c "ss -lntp 2>/dev/null || netstat -tulpen 2>/dev/null || true" || true
 
           echo "---- inside-container: curl localhost:${PORT} ----"
-          docker exec "$CONTAINER_NAME" sh -c "curl --silent --fail -v http://localhost:${PORT} 2>&1 || echo inside-curl-failed" || true
+          # Use the application health endpoint to check readiness
+          docker exec "$CONTAINER_NAME" sh -c "curl --silent --fail -v http://localhost:${PORT}/health 2>&1 || echo inside-curl-failed" || true
 
           echo "---- runner: curl http://localhost:${PORT} ----"
-          if curl --silent --fail "http://localhost:${PORT}" >/dev/null 2>&1; then
+          if curl --silent --fail "http://localhost:${PORT}/health" >/dev/null 2>&1; then
             echo "runner curl succeeded"
           else
             echo "runner curl failed; dumping diagnostics"
