@@ -344,7 +344,7 @@ try {
 // Subscribe to prefetch events for internal observability and reactive caching
 try {
   const sub = new Redis(CONFIG.REDIS_URL);
-  sub.subscribe('prefetch:updates', 'prefetch:error').then(() => logger.info('Subscribed to prefetch pub/sub channels')).catch(()=>{});
+  sub.subscribe('prefetch:updates', 'prefetch:error').then(() => logger.info('Subscribed to prefetch pub/sub channels')).catch((err)=>{ logger.warn('Prefetch subscribe failed', err && (err.message||String(err))); });
   sub.on('message', async (channel, message) => {
     let payload = message;
     try { payload = JSON.parse(message); } catch (e) { /* raw */ }
@@ -365,7 +365,7 @@ try {
   const isMock = redis && redis.constructor && redis.constructor.name === 'MockRedis';
   if (!isMock && CONFIG.REDIS_URL) {
     const sub = new Redis(CONFIG.REDIS_URL);
-    sub.subscribe('prefetch:updates', 'prefetch:error').then(() => logger.info('Subscribed to prefetch pub/sub channels')).catch(()=>{});
+    sub.subscribe('prefetch:updates', 'prefetch:error').then(() => logger.info('Subscribed to prefetch pub/sub channels')).catch((err)=>{ logger.warn('Prefetch subscribe failed (external)', err && (err.message||String(err))); });
     sub.on('message', async (channel, message) => {
       let payload = message;
       try { payload = JSON.parse(message); } catch (e) { /* raw */ }
@@ -510,7 +510,7 @@ try {
           }
 
           await redis.lpush('telegram:updates', JSON.stringify(body));
-          try { await redis.ltrim('telegram:updates', 0, 10000); } catch (e){}
+          try { await redis.ltrim('telegram:updates', 0, 10000); } catch (e){ console.debug('[TELEGRAM][WORKER-SERVER] ltrim failed (non-fatal)', e && (e.message||String(e))); }
           console.log('[TELEGRAM][WORKER-SERVER] Update enqueued');
           return res.sendStatus(200);
         } else {
@@ -826,15 +826,6 @@ async function handleCommand(chatId, userId, cmd, args, fullText) {
         }
       },
       "/about": () => basicHandlers.about(chatId),
-      "/live": async () => {
-        // route /live to the complete handler (same as above)
-        try {
-          const result = await completeHandler.handleLive(chatId, null, sharedServices);
-          await telegram.sendMessage(chatId, result.text, { reply_markup: result.reply_markup, parse_mode: result.parse_mode || 'Markdown' });
-        } catch (e) {
-          logger.warn('/live handler (duplicate) error', e?.message);
-        }
-      },
       "/news": () => basicHandlers.news(chatId),
       "/highlights": () => basicHandlers.highlights(chatId),
       "/standings": async () => {
