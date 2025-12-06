@@ -47,9 +47,9 @@ async function sendTelegram(token, chatId, text) {
       console.log('TELEGRAM_TOKEN or ADMIN_TELEGRAM_ID not set; skipping Telegram notification.');
     }
   } catch (e) {
-    console.error('Monitor failed:', e);
+    console.error('Monitor failed:', e && e.message ? e.message : e);
     process.exit(2);
   } finally {
-    try { redis.disconnect(); } catch (ex) {}
+    try { redis.disconnect(); } catch (ex) { /* noop */ }
   }
 })();

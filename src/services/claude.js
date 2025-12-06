@@ -8,7 +8,7 @@ class ClaudeService {
     this.enabled = Boolean(apiKey);
   }
 
-  async chat(message, context = {}) {
+  async chat(message, _context = {}) {
     if (!this.enabled) throw new Error('Claude API key not configured');
 
     const url = 'https://api.anthropic.com/v1/complete';

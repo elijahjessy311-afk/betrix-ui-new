@@ -42,11 +42,11 @@ class LocalAIService {
   }
 
   // Lightweight analysis stub (returns template)
-  async analyzeSport(sport, matchData, question) {
+  async analyzeSport(sport, matchData, _question) {
     return `Analysis for ${sport}: I don't have full model access here, but based on the data you provided: ${JSON.stringify(matchData).slice(0, 400)}... For detailed analysis you can ask specific questions like 'who's favored' or 'what's the form'.`;
   }
 
-  fallbackResponse(message, context = {}) {
+  fallbackResponse(message, _context = {}) {
     const msg = String(message || "").toLowerCase();
     if (msg.includes("who are you") || msg.includes("what are you") || msg.includes("your name")) {
       return `👋 I'm BETRIX (local fallback) — a compact AI assistant. I can answer simple questions, fetch quick facts, and run built-in sports helpers. Use /menu for commands.`;

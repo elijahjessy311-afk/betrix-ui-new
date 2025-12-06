@@ -15,6 +15,8 @@ if (!redisUrl) {
   client.on("error", (e) => console.error("redis err", e && e.message));
   await client.connect();
   console.log("retry-worker started");
+  // loop intentionally runs indefinitely to process retry queue
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       const item = await client.brPop("betrix:retry", 5); // timeout 5s

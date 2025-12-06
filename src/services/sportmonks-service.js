@@ -12,6 +12,8 @@ import { CONFIG } from '../config.js';
 import { Logger } from '../utils/logger.js';
 
 const logger = new Logger('SportMonksService');
+// Mark imports that may be optional or used conditionally to avoid lint noise
+void fetch; void dns; void URL;
 
 export default class SportMonksService {
   constructor(redis = null) {
@@ -47,7 +49,6 @@ export default class SportMonksService {
 
   async _fetch(endpoint, query = {}) {
     const attempts = 3;
-    let lastError = null;
     
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
@@ -86,7 +87,7 @@ export default class SportMonksService {
       } catch (e) {
         try {
           // Redact token for logs
-          const safeUrl = (e && e.config && e.config.url) ? String(e.config.url).replace(/(api_token=[^&]+)/gi, 'api_token=REDACTED') : this._buildUrl(endpoint, query).replace(/(api_token=[^&]+)/gi, 'api_token=REDACTED');
+          // Intentionally avoid accessing/logging the request URL here to prevent leaking tokens in logs
           const status = e && e.response && e.response.status ? e.response.status : 'N/A';
           const dataSnippet = e && e.response && e.response.data ? (typeof e.response.data === 'string' ? e.response.data.substring(0,200) : JSON.stringify(e.response.data).substring(0,200)) : null;
           logger.warn(`[SportMonksService] attempt ${attempt}/${attempts} failed | endpoint:${endpoint} | status:${status} | error:${e?.message || String(e)}`);

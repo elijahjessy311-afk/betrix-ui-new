@@ -4,7 +4,6 @@
  */
 
 import { Logger } from "../utils/logger.js";
-import { HttpClient } from "./http-client.js";
 
 const logger = new Logger("Predictor");
 
@@ -48,7 +47,7 @@ class PredictionEngine {
   /**
    * Calculate team form score (0-100)
    */
-  async calculateFormScore(team1, team2) {
+  async calculateFormScore(team1, _team2) {
     try {
       // Mock form calculation - in production, use actual match history
       const key = `form:${team1}`;

@@ -184,7 +184,7 @@ class FootballAggregator {
   /**
    * Get head-to-head history (stub - can integrate with API)
    */
-  async getHeadToHead(homeId, awayId) {
+  async getHeadToHead(_homeId, _awayId) {
     return {
       totalMatches: 'N/A',
       homeWins: 'N/A',
@@ -196,7 +196,7 @@ class FootballAggregator {
   /**
    * Get team stats (stub - can integrate with API)
    */
-  async getTeamStats(teamId) {
+  async getTeamStats(_teamId) {
     return {
       position: 'N/A',
       played: 'N/A',

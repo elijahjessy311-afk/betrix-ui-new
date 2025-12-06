@@ -10,11 +10,9 @@ try {
   if (typeof process !== 'undefined' && process.env && !process.env.STARTUP_ENFORCE_LOGGED) {
     // non-sensitive log for build/runtime visibility
     // Avoid exposing secrets; only set a marker env var to avoid duplicate logs
-    try { process.env.STARTUP_ENFORCE_LOGGED = '1'; } catch (e) {}
+    try { process.env.STARTUP_ENFORCE_LOGGED = '1'; } catch (e) { void e; }
     // Note: console output may be captured by Render logs
     console.debug && console.debug('startup-enforce-webhooks loaded (no-op)');
   }
-} catch (e) {
-  // swallow any bootstrap errors to avoid blocking process start
-}
+} catch (e) { void e; }
 module.exports = {};

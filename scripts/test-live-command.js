@@ -4,7 +4,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 import Redis from 'ioredis';
 import { SportsAggregator } from '../src/services/sports-aggregator.js';
-import handler from '../src/handlers/telegram-handler-v2-clean.js';
+import { handleMessage } from '../src/handlers/telegram-handler-v2-clean.js';
 
 const redis = new Redis(process.env.REDIS_URL);
 
@@ -24,7 +24,7 @@ async function testLiveCommand() {
       message: { text: '/live', chat: { id: 123 }, from: { id: 456, first_name: 'Test' } },
     };
 
-    const result = await handler.handleMessage(mockContext, redis, { sportsAggregator: aggregator });
+    const result = await handleMessage(mockContext, redis, { sportsAggregator: aggregator });
 
     if (result && result.method === 'sendMessage') {
       console.log('\n📤 BOT RESPONSE (sendMessage):');

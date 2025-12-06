@@ -6,6 +6,7 @@
 import { Logger } from "../utils/logger.js";
 
 const logger = new Logger("SportTrivia");
+void logger;
 
 class SportsTriviaService {
   static QUOTES = [

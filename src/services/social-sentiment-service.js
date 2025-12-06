@@ -6,6 +6,7 @@
 import { Logger } from "../utils/logger.js";
 
 const logger = new Logger("SocialSentiment");
+void logger;
 
 class SocialSentimentService {
   /**
@@ -27,7 +28,7 @@ class SocialSentimentService {
   /**
    * Analyze public sentiment for match
    */
-  static analyzeMatchSentiment(team1, team2) {
+  static analyzeMatchSentiment(_team1, _team2) {
     const sentiments = {
       positive: ["excited", "confidence", "strong form", "unstoppable"],
       negative: ["struggling", "injuries", "poor form", "defensive issues"],

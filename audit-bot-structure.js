@@ -4,6 +4,8 @@
  * Verifies all connections, API integrations, and command flows
  */
 
+/* eslint-disable no-unused-vars */
+
 // Load environment variables from .env for local audits
 import 'dotenv/config';
 import { getRedis } from './src/lib/redis-factory.js';

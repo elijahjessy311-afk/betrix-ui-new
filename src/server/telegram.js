@@ -20,7 +20,7 @@ function resolveTelegramChatId(update){
         if (obj[k] && typeof obj[k] === 'object') stack.push(obj[k]);
       }
     }
-  } catch(e){ }
+  } catch(e){ void e; }
 
   return undefined;
 }

@@ -139,6 +139,7 @@ export function formatBettingSites(sites) {
  * Create inline keyboard for betting sites
  */
 export function createBettingSitesKeyboard(sites, selectedSiteId = null) {
+  void selectedSiteId;
   const buttons = sites.map(site => [{
     text: `${site.logo} ${site.name}`,
     url: site.url

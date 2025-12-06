@@ -58,6 +58,7 @@ export async function getEspnLiveMatches({ sport = 'football' } = {}) {
 
   // If ESPN API fails, return fallback live data
   // This ensures the bot is never without data
+  void lastError;
   console.log('ESPN API unavailable, using realistic fallback live data');
   return getLiveDataFallback();
 }

@@ -8,6 +8,8 @@ export class PaymentProcessor {
   static async processPaymentJobs() {
     console.log('💳 Payment Processor started');
     
+    // Intentional long-running worker loop - polls Redis for payment jobs
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       try {
         const jobRaw = await redis.lpop('payment-jobs');
@@ -80,8 +82,9 @@ export class PaymentProcessor {
   }
 
   static async handlePayPalWebhook(job) {
-    const { event, resource } = job;
-    
+    const { event, resource: _resource } = job;
+    void _resource;
+
     console.log(`PayPal webhook received: ${event}`);
     
     if (event === 'PAYMENT.CAPTURE.COMPLETED') {

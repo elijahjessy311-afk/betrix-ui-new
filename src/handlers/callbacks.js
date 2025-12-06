@@ -23,12 +23,13 @@ import {
 import { createPaymentOrder, getPaymentInstructions } from './payment-router.js';
 
 const logger = new Logger('CallbackHandlers');
+void logger;
 
 /**
  * Main callback router
  * Dispatches to specific handler based on callback_data prefix
  */
-export async function handleCallback(data, chatId, userId, redis, services) {
+export async function handleCallback(data, chatId, userId, redis, _services) {
   logger.info('Callback received', { userId, data });
 
   try {
@@ -42,7 +43,7 @@ export async function handleCallback(data, chatId, userId, redis, services) {
     }
     
     if (data.startsWith('league_')) {
-      return await handleLeagueCallback(data, chatId, userId, redis, services);
+      return await handleLeagueCallback(data, chatId, userId, redis, _services);
     }
     
     if (data.startsWith('sub_')) {
@@ -50,11 +51,11 @@ export async function handleCallback(data, chatId, userId, redis, services) {
     }
     
     if (data.startsWith('pay_')) {
-      return await handlePaymentCallback(data, chatId, userId, redis, services);
+      return await handlePaymentCallback(data, chatId, userId, redis, _services);
     }
 
     if (data.startsWith('news_')) {
-      return await handleNewsArticleCallback(data, chatId, userId, redis, services);
+      return await handleNewsArticleCallback(data, chatId, userId, redis, _services);
     }
     
     if (data.startsWith('profile_')) {
@@ -85,7 +86,7 @@ export async function handleCallback(data, chatId, userId, redis, services) {
 // MENU CALLBACKS (menu_*)
 // ============================================================================
 
-function handleMenuCallback(data, chatId, userId, redis) {
+function handleMenuCallback(data, chatId, _userId, _redis) {
   logger.info('handleMenuCallback', { data });
 
   const menuMap = {
@@ -133,7 +134,7 @@ function handleMenuCallback(data, chatId, userId, redis) {
 // SPORT CALLBACKS (sport_*)
 // ============================================================================
 
-function handleSportCallback(data, chatId, userId, redis) {
+function handleSportCallback(data, chatId, _userId, _redis) {
   logger.info('handleSportCallback', { data });
 
   const sport = data.replace('sport_', '').toUpperCase();
@@ -163,10 +164,38 @@ function handleSportCallback(data, chatId, userId, redis) {
 }
 
 // ============================================================================
+// LEAGUE CALLBACKS (league_*) - placeholder implementation
+// Adds a minimal handler so callers do not hit undefined references.
+async function handleLeagueCallback(data, chatId, userId, redis, _services) {
+  logger.info('handleLeagueCallback', { data, userId });
+  void redis;
+  try {
+    const parts = data.split('_');
+    const leagueId = parts[1] || 'unknown';
+
+    // Minimal safe response: avoid throwing if services are missing
+    return {
+      method: 'editMessageText',
+      chat_id: chatId,
+      text: `🏆 League details for *${leagueId}* are not available yet.`,
+      reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'menu_standings' }]] },
+      parse_mode: 'Markdown'
+    };
+  } catch (e) {
+    logger.warn('handleLeagueCallback error', e);
+    return {
+      chat_id: chatId,
+      text: '❌ Error loading league details',
+      parse_mode: 'Markdown'
+    };
+  }
+}
+
+// ============================================================================
 // SUBSCRIPTION CALLBACKS (sub_*)
 // ============================================================================
 
-function handleSubscriptionCallback(data, chatId, userId, redis) {
+function handleSubscriptionCallback(data, chatId, _userId, _redis) {
   logger.info('handleSubscriptionCallback', { data });
 
   const tier = data.replace('sub_', '').toUpperCase();
@@ -205,7 +234,7 @@ Ready to upgrade? Select a payment method below:`;
 // PAYMENT CALLBACKS (pay_*)
 // ============================================================================
 
-async function handlePaymentCallback(data, chatId, userId, redis, services) {
+async function handlePaymentCallback(data, chatId, userId, redis, _services) {
   logger.info('handlePaymentCallback', { data, userId });
 
   try {
@@ -308,7 +337,7 @@ async function handlePaymentCallback(data, chatId, userId, redis, services) {
 // PROFILE CALLBACKS (profile_*)
 // ============================================================================
 
-function handleProfileCallback(data, chatId, userId, redis) {
+function handleProfileCallback(data, chatId, _userId, _redis) {
   logger.info('handleProfileCallback', { data });
 
   const subMenuMap = {
@@ -366,7 +395,7 @@ Contact support for more options.`,
 // HELP CALLBACKS (help_*)
 // ============================================================================
 
-function handleHelpCallback(data, chatId, userId, redis) {
+function handleHelpCallback(data, chatId, _userId, _redis) {
   logger.info('handleHelpCallback', { data });
 
   const helpTopics = {

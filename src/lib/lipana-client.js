@@ -25,7 +25,7 @@ async function stkPush({ amount, phone, reference, tx_ref, callback_url }) {
   });
 
   let parsed = null;
-  try { parsed = await resp.json(); } catch (e) { /* ignore */ }
+  try { parsed = await resp.json(); } catch (e) { void e; }
   return { status: resp.status, raw: parsed || null };
 }
 
@@ -41,7 +41,7 @@ async function getTransaction(transactionId) {
     timeout: 15000
   });
   let parsed = null;
-  try { parsed = await resp.json(); } catch (e) { /* ignore */ }
+  try { parsed = await resp.json(); } catch (e) { void e; }
   return { status: resp.status, raw: parsed || null };
 }
 

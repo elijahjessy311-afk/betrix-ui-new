@@ -2,9 +2,7 @@
  * Verify BETRIX Autonomous Operation
  */
 
-import { Logger } from "./src/utils/logger.js";
-
-const logger = new Logger("AutonomousVerify");
+// Logger not required for this quick verification script
 
 console.log("🔍 BETRIX Autonomous Operation Verification\n");
 

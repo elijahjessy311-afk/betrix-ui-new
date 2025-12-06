@@ -161,6 +161,7 @@ export class LiveFeedHandler {
         this.aggregator.getFixtures(),
         this.aggregator.getStandings(39)
       ]);
+      void standings;
 
       // Count by status
       const live = (liveMatches || []).filter(m => m.status === 'LIVE').length;

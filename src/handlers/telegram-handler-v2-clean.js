@@ -9,6 +9,8 @@ import { mainMenu } from './menu-handler.js';
 import SportMonksService from '../services/sportmonks-service.js';
 
 const logger = new Logger('TelegramHandlerV2');
+void logger;
+void logger;
 
 const ICONS = {
   brand: '🌀',
@@ -30,6 +32,7 @@ const ICONS = {
 function tryParseJson(s) {
   try { return JSON.parse(s); } catch (e) { return null; }
 }
+void tryParseJson;
 
 /**
  * Fetch REAL live soccer matches from SportMonks
@@ -148,8 +151,9 @@ async function buildLiveSoccerMenu(redis, sportMonksAPI) {
 }
 
 export async function handleMessage(update, redis, services) {
+  let message;
   try {
-    const message = update.message || update.edited_message;
+    message = update.message || update.edited_message;
     if (!message) return null;
     const chatId = message.chat.id;
     const text = message.text || '';
@@ -207,7 +211,7 @@ export async function handleMessage(update, redis, services) {
     logger.warn('handleMessage error', e?.message || String(e));
     return {
       method: 'sendMessage',
-      chat_id: message.chat.id,
+      chat_id: message?.chat?.id,
       text: '❌ Error processing message. Try /menu',
       parse_mode: 'HTML'
     };
@@ -215,8 +219,9 @@ export async function handleMessage(update, redis, services) {
 }
 
 export async function handleCallbackQuery(update, redis, services) {
+  let cq;
   try {
-    const cq = update.callback_query;
+    cq = update.callback_query;
     if (!cq || !cq.data) return null;
     const data = cq.data;
     const chatId = cq.message && cq.message.chat && cq.message.chat.id;
@@ -391,7 +396,7 @@ export async function handleCallbackQuery(update, redis, services) {
     logger.warn('handleCallbackQuery failed', e?.message || String(e));
     return {
       method: 'answerCallbackQuery',
-      callback_query_id: cq.id,
+      callback_query_id: cq?.id,
       text: '❌ Error processing action',
       show_alert: true
     };

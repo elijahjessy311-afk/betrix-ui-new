@@ -1,4 +1,3 @@
-import { Database } from './database.js';
 import { getRedis } from '../lib/redis-factory.js';
 
 export class AdminService {
@@ -29,7 +28,7 @@ export class AdminService {
     };
   }
 
-  static async broadcastMessage(message) {
+  static async broadcastMessage(_message) {
     const userIds = await this.redis.zrange('users:all', 0, -1);
     return userIds;
   }

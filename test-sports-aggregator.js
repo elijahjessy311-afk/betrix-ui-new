@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import SportsAggregator from './src/services/sports-aggregator.js';
+import { SportsAggregator } from './src/services/sports-aggregator.js';
 import { CONFIG } from './src/config.js';
 
 const redisClient = new Redis(CONFIG.REDIS_URL || process.env.REDIS_URL || 'redis://localhost:6379');

@@ -97,7 +97,7 @@ class GeminiService {
     }
   }
 
-  fallbackResponse(message, context = {}) {
+  fallbackResponse(message, _context = {}) {
     const msg = message.toLowerCase();
 
     // Check if user is asking about BETRIX identity

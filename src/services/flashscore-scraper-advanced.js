@@ -31,6 +31,7 @@ function pickUserAgent() {
 let browserInstance = null;
 const MAX_BROWSER_INSTANCES = 1;
 let browserCount = 0;
+void MAX_BROWSER_INSTANCES; void browserCount;
 
 async function getBrowser() {
   if (!puppeteer) return null;

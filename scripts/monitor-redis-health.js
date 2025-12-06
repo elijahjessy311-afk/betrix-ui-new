@@ -128,7 +128,7 @@ async function performHealthCheck() {
     }
 
     // Test 3: Database info
-    const info = await redis.info('stats');
+    const _info = await redis.info('stats');
     
     // Test 4: Command latency
     const latencyStart = Date.now();
@@ -146,6 +146,7 @@ async function performHealthCheck() {
       timestamp: new Date().toISOString(),
       responseTime: `${responseTime}ms`,
       latency: `${latency}ms`,
+      rawInfo: _info,
       tests: {
         ping: 'PASS',
         getset: 'PASS',
@@ -288,8 +289,9 @@ async function startMonitoring() {
 // EVENT HANDLERS
 // ============================================================================
 
-redis.on('error', (err) => {
+redis.on('error', () => {
   // Errors are handled in performHealthCheck
+  /* noop - global redis error handled in performHealthCheck */
 });
 
 redis.on('connect', () => {

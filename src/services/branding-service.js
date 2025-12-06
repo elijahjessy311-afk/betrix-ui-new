@@ -105,7 +105,7 @@ class BrandingService {
     mobile: "📱",
     online: "🌐",
     chat: "💬",
-    goal: "🎯",
+    target: "🎯",
     rocket: "🚀",
     approve: "👌",
     

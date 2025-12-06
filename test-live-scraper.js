@@ -1,5 +1,5 @@
 import { getEspnLiveMatches } from './src/services/espn-provider.js';
-import liveScraper from './src/services/live-scraper.js';
+import * as liveScraper from './src/services/live-scraper.js';
 
 (async function run() {
   try {

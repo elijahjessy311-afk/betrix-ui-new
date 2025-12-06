@@ -10,7 +10,8 @@ jobs:
   build-and-smoke:
     runs-on: ubuntu-latest
     env:
-      PORT: (process.env.PORT || (process.env.PORT || 10000))
+      # Ensure PORT is a numeric value for Docker - use 10000 as a safe default
+      PORT: 10000
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,15 +24,18 @@ jobs:
         run: |
           set -euo pipefail
           WORKDIR=$GITHUB_WORKSPACE
-          PORT=${PORT:-(process.env.PORT || (process.env.PORT || 10000))}
+          # Use numeric default for PORT when not provided
+          PORT=${PORT:-10000}
           COMMIT_SHA=${COMMIT_SHA:-$(git rev-parse --short HEAD)}
           CONTAINER_NAME="betrix-smoke-pub-${GITHUB_RUN_ID:-local}"
 
           echo "Starting container $CONTAINER_NAME with -p ${PORT}:${PORT} and HOST=0.0.0.0"
+          # Start container and keep it alive while the server runs so we can inspect logs.
           docker run --rm -d --name "$CONTAINER_NAME" -p ${PORT}:${PORT} -v "$WORKDIR":"$WORKDIR":rw -w "$WORKDIR" -e PORT=${PORT} -e HOST=0.0.0.0 node:22 \
-            bash -lc "npm ci --silent && if npm run | grep -q build; then npm run build; fi && echo starting server && PORT=${PORT} COMMIT_SHA=${COMMIT_SHA} HOST=0.0.0.0 node server.js > server.log 2>&1" || true
+            bash -lc "npm ci --silent 2>&1 | tee /tmp/npmci.log || true; if npm run | grep -q build; then npm run build 2>&1 | tee -a /tmp/npmci.log || true; fi; echo starting server; PORT=${PORT} COMMIT_SHA=${COMMIT_SHA} HOST=0.0.0.0 npm run start > server.log 2>&1 & sleep 1; tail -n +1 -f server.log" || true
 
-          sleep 2
+          # Give the container a bit more time to finish setup and start the server
+          sleep 10
 
           echo "---- docker ps (container) ----"
           docker ps --filter name="$CONTAINER_NAME" || true
@@ -43,10 +47,11 @@ jobs:
           docker exec "$CONTAINER_NAME" sh -c "ss -lntp 2>/dev/null || netstat -tulpen 2>/dev/null || true" || true
 
           echo "---- inside-container: curl localhost:${PORT} ----"
-          docker exec "$CONTAINER_NAME" sh -c "curl --silent --fail -v http://localhost:${PORT} 2>&1 || echo inside-curl-failed" || true
+          # Use the application health endpoint to check readiness
+          docker exec "$CONTAINER_NAME" sh -c "curl --silent --fail -v http://localhost:${PORT}/health 2>&1 || echo inside-curl-failed" || true
 
           echo "---- runner: curl http://localhost:${PORT} ----"
-          if curl --silent --fail "http://localhost:${PORT}" >/dev/null 2>&1; then
+          if curl --silent --fail "http://localhost:${PORT}/health" >/dev/null 2>&1; then
             echo "runner curl succeeded"
           else
             echo "runner curl failed; dumping diagnostics"

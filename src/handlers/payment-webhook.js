@@ -58,6 +58,7 @@ export async function handleMpesaCallback(req, redis, bot) {
     const mpesaReceiptNumber = items.MpesaReceiptNumber || items.mpesaReceiptNumber || '';
     const phoneNumber = items.PhoneNumber || items.phoneNumber || '';
     const transactionDate = items.TransactionDate || items.transactionDate || '';
+    void transactionDate;
 
     logger.info('M-Pesa payment received:', {
       amount,
@@ -110,7 +111,7 @@ export async function handleMpesaCallback(req, redis, bot) {
             const pool = new Pool({ connectionString: connStr, ssl: { rejectUnauthorized: false } });
             const upd = `UPDATE payments SET status = 'success', tx_id = $1, updated_at = now() WHERE (metadata->>'provider_checkout_id') = $2 OR tx_ref = $3`;
             await pool.query(upd, [mpesaReceiptNumber, mpesaReceiptNumber, orderId]);
-            try { await pool.end(); } catch(e){}
+            try { await pool.end(); } catch (e) { void e; }
           }
         } catch (ee) {
           logger.warn('Failed to update payments table after MPESA activation', ee?.message || String(ee));
@@ -145,6 +146,7 @@ export async function handleSafaricomTillCallback(req, redis, bot) {
       timestamp,
       status
     } = req.body;
+    void timestamp;
 
     // Optional HMAC validation
     const TILL_SECRET = process.env.SAFARICOM_TILL_SECRET || process.env.PAYMENT_WEBHOOK_SECRET || null;
@@ -252,6 +254,7 @@ export async function handlePayPalWebhook(req, redis, bot) {
 
     if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
       const { supplementary_data, id, status } = event.resource;
+      void supplementary_data;
       
       if (status === 'COMPLETED') {
         logger.info('PayPal payment completed:', id);
@@ -259,9 +262,10 @@ export async function handlePayPalWebhook(req, redis, bot) {
         // Try mapping by provider reference first
         let subscription = null;
         let foundOrderId = null;
+        let possibleOrderIds = [];
         try {
           // Common places where PayPal order id may appear
-          const possibleOrderIds = [
+          possibleOrderIds = [
             event.resource.supplementary_data?.related_ids?.order_id,
             event.resource.order_id,
             event.resource.invoice_id,

@@ -4,6 +4,7 @@
 
 import fs from "fs";
 import path from "path";
+void path;
 
 class ComprehensiveLogger {
   constructor(module, redis = null) {
@@ -48,10 +49,11 @@ class ComprehensiveLogger {
     }
   }
 
-  async trackMetric(key, value) {
+  async trackMetric(key, _value) {
     if (this.redis) {
       await this.redis.incr(`metrics:${key}`);
     }
+    void _value;
   }
 }
 

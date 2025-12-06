@@ -2,7 +2,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 import IORedis from 'ioredis';
-import SportsAggregator from '../src/services/sports-aggregator.js';
+import { SportsAggregator } from '../src/services/sports-aggregator.js';
 
 async function main() {
   const redisUrl = process.env.REDIS_URL;

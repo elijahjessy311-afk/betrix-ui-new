@@ -71,14 +71,10 @@ const TEAM_SUBREDDITS = {
 };
 
 async function _fetchRedditRss(url, headers, proxy = null) {
-  try {
-    const fetchUrl = proxy ? `${proxy}?url=${encodeURIComponent(url)}` : url;
-    const res = await fetch(fetchUrl, { timeout: 10000, headers });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.text();
-  } catch (e) {
-    throw e;
-  }
+  const fetchUrl = proxy ? `${proxy}?url=${encodeURIComponent(url)}` : url;
+  const res = await fetch(fetchUrl, { timeout: 10000, headers });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.text();
 }
 
 export async function getRedditHeadlines({ subreddit = 'soccer', max = 10, proxy = null, teamName = null } = {}) {

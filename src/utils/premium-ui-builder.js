@@ -6,6 +6,7 @@
 import { Logger } from '../utils/logger.js';
 
 const logger = new Logger('PremiumUIBuilder');
+void logger; // Silence unused logger warning
 
 // BETRIX Brand Constants
 export const BETRIX_BRAND = {
@@ -205,6 +206,7 @@ export function buildFixturesDisplay(fixtures, league = 'League', view = 'upcomi
  * Build league selector keyboard
  */
 export function buildLeagueSelectorKeyboard(sport = 'football', tier = 'FREE') {
+  void tier;
   const leagues = {
     'football': [
       { text: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League', callback_data: 'league_39' },
@@ -347,6 +349,7 @@ _Use code BETRIX10 for 10% off your first month!_`;
  */
 export function buildErrorMessage(error, tier = 'FREE') {
   let msg = `❌ *Error*\n\n`;
+  void tier;
 
   if (error.includes('quota') || error.includes('limit')) {
     msg += `⚠️ API Quota reached. Retrying in a moment...`;

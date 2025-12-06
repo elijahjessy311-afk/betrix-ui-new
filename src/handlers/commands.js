@@ -24,6 +24,10 @@ import {
 import { canAccessFeature, TIERS } from './payment-handler.js';
 
 const logger = new Logger('Commands');
+// Mark occasionally-imported utilities as used when this module only needs them indirectly
+void sportsMenu;
+void canAccessFeature;
+void TIERS;
 
 /**
  * Normalize an API-Football fixture (or similar) into a small shape used by formatLiveGames
@@ -144,7 +148,7 @@ export async function handleCommand(text, chatId, userId, redis, services) {
  * /start - Welcome and main menu
  * Shows greeting + main menu buttons
  */
-export async function handleStart(chatId, userId, redis, services) {
+export async function handleStart(chatId, userId, redis, _services) {
   logger.info('handleStart', { userId, chatId });
   
   try {
@@ -191,6 +195,7 @@ export async function handleMenu(chatId, userId, redis) {
   try {
     const user = await redis.hgetall(`user:${userId}`);
     const tier = user?.tier || 'FREE';
+    void tier;
     
     return {
       chat_id: chatId,
@@ -618,7 +623,7 @@ export async function handleVVIP(chatId, userId, redis) {
 /**
  * /pricing - Show pricing table
  */
-export async function handlePricing(chatId, userId, redis) {
+export async function handlePricing(chatId, userId, _redis) {
   logger.info('handlePricing', { userId });
   
   const pricing = `🌀 *BETRIX Pricing*

@@ -189,7 +189,7 @@ export class OddsAnalyzer {
   /**
    * Calculate value potential
    */
-  _calculateValue(prediction, odds) {
+  _calculateValue(prediction, _odds) {
     const bookProb = 1 / prediction.odds; // Implied probability from odds
     const ourProb = prediction.probability / 100;
     const edge = (ourProb - bookProb) / bookProb * 100;

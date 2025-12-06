@@ -1,5 +1,13 @@
 ﻿const path = require('path');
 
+// top-level shared symbols used by health/webhook guards and graceful shutdown
+let app;
+let server;
+let queue;
+// optional express reference (try-catch so this file can be parsed without express installed)
+let express;
+try { express = require('express'); } catch (e) { express = null; }
+
 let appModule;
 try {
   const candidates = [
@@ -10,7 +18,7 @@ try {
     path.join(process.cwd(), 'index.js')
   ];
   for (const c of candidates) {
-    try { appModule = require(c); break; } catch (e) { }
+    try { appModule = require(c); break; } catch (e) { void e; }
   }
 } catch (e) {
   appModule = null;
@@ -23,9 +31,9 @@ if (appModule && typeof appModule.createServer === 'function') {
 } else if (appModule && appModule.default && typeof appModule.default.createServer === 'function') {
   module.exports.createServer = appModule.default.createServer;
 } else {
-  const express = require('express');
+  try { require('express'); } catch (e) { void e; }
   module.exports.createServer = function createServer() {
-    const app = express();
+    app = (express || require('express'))();
 /* COPILOT-HEALTH-READINESS-GUARD - START
    Lightweight /health and /ready endpoints and graceful shutdown handling.
    - /health: liveness probe (very cheap)
@@ -91,11 +99,11 @@ try {
             await queue.drain(); // best-effort; implement drain in your queue
             console.info(JSON.stringify({ event: 'queue.drained', timestamp: new Date().toISOString() }));
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) { void e; }
 
         console.info(JSON.stringify({ event: 'shutdown.complete', timestamp: new Date().toISOString(), inflight }));
         // exit process (let platform restart)
-        try { process.exit(0); } catch (e) { /* ignore */ }
+        try { process.exit(0); } catch (e) { void e; }
       }
 
       process.on('SIGTERM', () => doShutdown('SIGTERM'));
@@ -107,11 +115,11 @@ try {
     app.get('/health', (req, res) => res.status(200).send('ok'));
     return app;
   };
-}
+} 
 
 if (require.main === module) {
   const http = require('http');
-  const server = module.exports.createServer();
+  server = module.exports.createServer();
   const port = process.env.PORT ? Number(process.env.PORT) : (process.env.PORT || process.env.PORT || 3000);
   http.createServer(server).listen(port, () => {
     console.log(`SERVER: listening on port ${port}`);
@@ -134,7 +142,7 @@ try {
           return res.status(403).send('forbidden');
         }
         // structured enqueue log
-        try { console.log(JSON.stringify({ event: 'webhook.received', ts: new Date().toISOString(), size: JSON.stringify(req.body || {}).length })); } catch(e){}
+        try { console.log(JSON.stringify({ event: 'webhook.received', ts: new Date().toISOString(), size: JSON.stringify(req.body || {}).length })); } catch(e){ void e; }
         // enqueue non-blocking
         if (typeof queue !== 'undefined' && queue.enqueue) {
           try { queue.enqueue('telegram:update', req.body); } catch(e) { console.error('enqueue failed', e); }
@@ -177,9 +185,9 @@ try {
 
       try {
         let QueueClient = null;
-        try { QueueClient = require('bullmq').Queue; safeLog({ event: 'queue.impl', impl: 'bullmq' }); } catch(e) {}
+        try { QueueClient = require('bullmq').Queue; safeLog({ event: 'queue.impl', impl: 'bullmq' }); } catch(e) { void e; }
         if (!QueueClient) {
-          try { QueueClient = require('bull').Queue; safeLog({ event: 'queue.impl', impl: 'bull' }); } catch(e) {}
+          try { QueueClient = require('bull').Queue; safeLog({ event: 'queue.impl', impl: 'bull' }); } catch(e) { void e; }
         }
 
         if (QueueClient) {
@@ -221,7 +229,7 @@ try {
         } catch (e) { safeLog({ event: 'ioredis.not.available', error: e.message }); }
       }
 
-      if (!wrapper.enqueue) wrapper.enqueue = async (name, payload) => { safeLog({ event: 'enqueue.noop', name }); };
+      if (!wrapper.enqueue) wrapper.enqueue = async (name, _payload) => { safeLog({ event: 'enqueue.noop', name }); };
       if (!wrapper.drain) wrapper.drain = async () => { safeLog({ event: 'drain.noop' }); };
 
       globalThis.queue = wrapper;
@@ -256,7 +264,7 @@ try {
         try { if (globalThis.queue && typeof globalThis.queue.drain === 'function') { await globalThis.queue.drain(); console.info(JSON.stringify({ event: 'queue.drained', timestamp: new Date().toISOString() })); } else { console.info('No queue.drain found; graceful drain is best-effort.'); } } catch (e) { console.error('queue drain error', e); }
 
         console.info(JSON.stringify({ event: 'shutdown.complete', timestamp: new Date().toISOString(), inflight }));
-        try { process.exit(0); } catch (e) { /* ignore */ }
+        try { process.exit(0); } catch (e) { void e; }
       }
 
       process.on('SIGTERM', () => doShutdown('SIGTERM'));
@@ -279,7 +287,7 @@ try {
           console.warn('webhook: invalid secret');
           return res.status(403).send('forbidden');
         }
-        try { console.log(JSON.stringify({ event: 'webhook.received', ts: new Date().toISOString(), size: JSON.stringify(req.body || {}).length })); } catch(e){}
+        try { console.log(JSON.stringify({ event: 'webhook.received', ts: new Date().toISOString(), size: JSON.stringify(req.body || {}).length })); } catch(e){ void e; }
         try {
           if (globalThis.queue && typeof globalThis.queue.enqueue === 'function') {
             globalThis.queue.enqueue('telegram:update', req.body).catch(()=>{});

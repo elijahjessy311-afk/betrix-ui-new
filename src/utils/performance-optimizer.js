@@ -82,7 +82,7 @@ export class PerformanceOptimizer {
       const results = {};
       const promises = [];
 
-      requests.forEach((req, idx) => {
+      requests.forEach((req, _idx) => {
         const promise = this.smartCache(req.key, req.fetchFn, ttlSeconds)
           .then(value => {
             results[req.key] = value;

@@ -68,7 +68,7 @@ Provide: 2-sentence prediction with reasoning.`;
   /**
    * Risk assessment
    */
-  assessRisk(totalOdds, matches) {
+  assessRisk(totalOdds, _matches) {
     if (totalOdds > 8) {
       return {
         level: "🔴 HIGH",
@@ -99,7 +99,7 @@ Provide: 2-sentence prediction with reasoning.`;
   /**
    * Format analysis for display
    */
-  formatAnalysisDisplay(analysis, slip, userStats) {
+  formatAnalysisDisplay(analysis, slip, _userStats) {
     const risk = this.assessRisk(slip.totalOdds, slip.matches);
 
     let text = `📊 <b>BETSLIP ANALYSIS</b>\n\n`;

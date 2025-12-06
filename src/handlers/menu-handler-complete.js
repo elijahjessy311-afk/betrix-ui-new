@@ -7,6 +7,7 @@
 import { Logger } from '../utils/logger.js';
 
 const logger = new Logger('MenuHandlerComplete');
+void logger;
 
 // ============================================================================
 // CONFIGURATION
@@ -15,6 +16,7 @@ const logger = new Logger('MenuHandlerComplete');
 const TILL_NUMBER = process.env.MPESA_TILL || '606215';
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@betrix.app';
 const ADMIN_ID = process.env.ADMIN_ID || '';
+void SUPPORT_EMAIL; void ADMIN_ID;
 
 // ============================================================================
 // PRICING & SUBSCRIPTION PLANS
@@ -316,7 +318,7 @@ export function buildOddsMenu(matches = []) {
 
   const keyboard = [];
 
-  matches.slice(0, 5).forEach((match, idx) => {
+  matches.slice(0, 5).forEach((match) => {
     keyboard.push([
       { text: `📈 ${match.home} vs ${match.away}`, callback_data: `odds:${match.id}` }
     ]);

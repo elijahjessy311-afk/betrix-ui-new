@@ -8,8 +8,8 @@
 import Redis from 'ioredis';
 import { Logger } from './src/utils/logger.js';
 import { TIERS, getUserSubscription } from './src/handlers/payment-handler.js';
-import { PAYMENT_PROVIDERS, getTierPrice, parseTransactionMessage, verifyPaymentFromMessage } from './src/handlers/payment-router.js';
-import v2Handler from './src/handlers/telegram-handler-v2.js';
+import { PAYMENT_PROVIDERS, getTierPrice, parseTransactionMessage } from './src/handlers/payment-router.js';
+import * as v2Handler from './src/handlers/telegram-handler-v2.js';
 import { mainMenu, subscriptionMenu, welcomeNewUser, welcomeReturningUser } from './src/handlers/menu-handler.js';
 
 const logger = new Logger('IntegrationTest');

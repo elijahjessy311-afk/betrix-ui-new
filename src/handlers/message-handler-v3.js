@@ -6,8 +6,8 @@
 
 import { Logger } from '../utils/logger.js';
 const logger = new Logger('MessageHandler');
-import { getUserState, setUserState, getStateData, setStateData, setUserState as updateUserStateData, StateTypes , createUserProfile, getUserProfile, updateUserProfile } from './data-models.js';
-
+import { getUserState, setUserState, getStateData, setStateData, StateTypes, createUserProfile, getUserProfile, updateUserProfile } from './data-models.js';
+void getUserProfile; void updateUserProfile;
 
 // ============================================================================
 // INTENT CLASSIFICATION
@@ -86,6 +86,7 @@ export async function handleMessage(message, userId, chatId, redis, services) {
     // Check if user is in a specific state (e.g., signup)
     const currentState = await getUserState(redis, userId);
     const stateData = await getStateData(redis, userId);
+    void stateData;
 
     // Handle state-specific inputs
     if (currentState !== StateTypes.IDLE) {
@@ -125,6 +126,7 @@ export async function handleMessage(message, userId, chatId, redis, services) {
 
 async function handleStateSpecificInput(state, message, userId, chatId, redis, services, stateData) {
   logger.info('handleStateSpecificInput', { state, userId });
+  void stateData;
 
   switch (state) {
     case StateTypes.SIGNUP_NAME:
@@ -262,37 +264,45 @@ async function handleIntent(intent, text, userId, chatId, redis, services) {
   logger.info('handleIntent', { intent, userId });
 
   switch (intent) {
-    case 'signup':
+    case 'signup': {
       const { handleSignup } = await import('./commands-v3.js');
       return await handleSignup(userId, chatId, redis);
+    }
 
-    case 'odds':
+    case 'odds': {
       const { handleOdds } = await import('./commands-v3.js');
       return await handleOdds(userId, chatId, redis, services);
+    }
 
-    case 'analyze':
+    case 'analyze': {
       const { handleAnalyze } = await import('./commands-v3.js');
       return await handleAnalyze(userId, chatId, redis, services);
+    }
 
-    case 'news':
+    case 'news': {
       const { handleNews } = await import('./commands-v3.js');
       return await handleNews(userId, chatId, redis, services);
+    }
 
-    case 'help':
+    case 'help': {
       const { handleHelp } = await import('./commands-v3.js');
       return await handleHelp(chatId);
+    }
 
-    case 'payment':
+    case 'payment': {
       const { handlePay } = await import('./commands-v3.js');
       return await handlePay(userId, chatId, redis);
+    }
 
-    case 'sites':
+    case 'sites': {
       const { handleBettingSitesCallback } = await import('./betting-sites.js');
       return await handleBettingSitesCallback('sites_main', chatId, userId, redis);
+    }
 
-    case 'menu':
+    case 'menu': {
       const { handleMenu } = await import('./commands-v3.js');
       return await handleMenu(userId, chatId, redis);
+    }
 
     default:
       return {

@@ -10,7 +10,7 @@ import { TIERS } from './src/handlers/payment-handler.js';
 import { PAYMENT_PROVIDERS, getTierPrice } from './src/handlers/payment-router.js';
 import { mainMenu, subscriptionMenu, welcomeNewUser, welcomeReturningUser, sportsMenu, profileMenu, helpMenu } from './src/handlers/menu-handler.js';
 
-const logger = new Logger('FeatureTest');
+void new Logger('FeatureTest');
 
 let testsPassed = 0;
 let testsFailed = 0;
@@ -101,7 +101,7 @@ test('Returning user welcome includes tier', returningUserWelcome.includes('VVIP
 
 // TEST 7: MENU BUTTONS
 console.log('\n🔘 MENU BUTTONS');
-const mainMenuButtons = mainMenu.reply_markup.inline_keyboard.flat().map(b => b.text).join(' | ');
+  
 test('Menu has all sport categories', mainMenu.reply_markup.inline_keyboard.length > 3);
 test('Subscription menu has Free tier', subscriptionMenu.reply_markup.inline_keyboard.flat().some(b => b.text.includes('Free')));
 test('Subscription menu has Pro tier', subscriptionMenu.reply_markup.inline_keyboard.flat().some(b => b.text.includes('Pro')));

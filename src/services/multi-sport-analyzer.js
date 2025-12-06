@@ -10,6 +10,8 @@ import fetch from 'node-fetch';
 import { CONFIG } from '../config.js';
 
 const logger = new Logger('MultiSportAnalyzer');
+void fetch;
+void CONFIG;
 
 export class MultiSportAnalyzer {
   constructor(redis, sportsAggregator, aiService = null) {
@@ -303,6 +305,7 @@ export class MultiSportAnalyzer {
   async _fetchSportSpecificData(sport, homeTeam, awayTeam, leagueId) {
     // This would connect to sport-specific APIs
     // For now, return mock data
+    void leagueId;
     return {
       sport,
       homeTeam,
@@ -343,6 +346,7 @@ export class MultiSportAnalyzer {
     const countWins = (form) => (form.match(/W/g) || []).length;
     const countDraws = (form) => (form.match(/D/g) || []).length;
     const countLosses = (form) => (form.match(/L/g) || []).length;
+    void countDraws; void countLosses;
 
     return {
       homeTeamForm: homeForm,
@@ -590,7 +594,8 @@ Provide a 2-3 sentence expert analysis on why this prediction has high confidenc
     const sports = this.getSupportedSports();
     let text = `⚽ *SUPPORTED SPORTS*\n\n`;
 
-    for (const [key, sport] of Object.entries(sports)) {
+    for (const [_key, sport] of Object.entries(sports)) {
+      void _key;
       text += `*${sport.icon} ${sport.name}*\n`;
       text += `Available markets: ${sport.markets.join(', ')}\n\n`;
     }
@@ -724,6 +729,7 @@ class FootballAnalyzer {
   async analyzeMarket(matchData, marketType, homeTeam, awayTeam, analyzer) {
     const homeStats = matchData.homeStats || {};
     const awayStats = matchData.awayStats || {};
+    void analyzer; void homeStats; void awayStats;
 
     switch (marketType) {
       case '1X2':
@@ -866,6 +872,7 @@ class FootballAnalyzer {
  */
 class BasketballAnalyzer {
   async analyzeMarket(matchData, marketType, homeTeam, awayTeam, analyzer) {
+    void homeTeam; void awayTeam; void analyzer;
     switch (marketType) {
       case 'MONEYLINE':
         return {
@@ -899,6 +906,7 @@ class BasketballAnalyzer {
  */
 class TennisAnalyzer {
   async analyzeMarket(matchData, marketType, homeTeam, awayTeam, analyzer) {
+    void homeTeam; void awayTeam; void analyzer;
     switch (marketType) {
       case 'MONEYLINE':
         return {
@@ -925,6 +933,7 @@ class TennisAnalyzer {
  */
 class CricketAnalyzer {
   async analyzeMarket(matchData, marketType, homeTeam, awayTeam, analyzer) {
+    void homeTeam; void awayTeam; void analyzer;
     switch (marketType) {
       case 'MONEYLINE':
         return {
@@ -958,6 +967,7 @@ class CricketAnalyzer {
  */
 class AmericanFootballAnalyzer {
   async analyzeMarket(matchData, marketType, homeTeam, awayTeam, analyzer) {
+    void homeTeam; void awayTeam; void analyzer;
     switch (marketType) {
       case 'MONEYLINE':
         return {
@@ -991,6 +1001,7 @@ class AmericanFootballAnalyzer {
  */
 class HockeyAnalyzer {
   async analyzeMarket(matchData, marketType, homeTeam, awayTeam, analyzer) {
+    void homeTeam; void awayTeam; void analyzer;
     switch (marketType) {
       case 'MONEYLINE':
         return {

@@ -6,6 +6,7 @@
 import { Logger } from "../utils/logger.js";
 
 const logger = new Logger("BettingSites");
+void logger;
 
 class BettingSitesService {
   static BETTING_SITES = {

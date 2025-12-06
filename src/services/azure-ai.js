@@ -45,7 +45,7 @@ export class AzureAIService {
 
     const text = await resp.text();
     let json = null;
-    try { json = text ? JSON.parse(text) : null; } catch (e) { /* ignore parse errors */ }
+    try { json = text ? JSON.parse(text) : null; } catch (e) { void e; }
 
     if (!resp.ok) {
       const errMsg = json?.error?.message || json?.error || text || `Azure returned ${resp.status}`;
@@ -61,9 +61,7 @@ export class AzureAIService {
         // chat completions: choices[0].message.content
         out = json.choices[0].message?.content || json.choices[0].text || null;
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) { void e; }
 
     this.lastUsed = this.deployment;
 

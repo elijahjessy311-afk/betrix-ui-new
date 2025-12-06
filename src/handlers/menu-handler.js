@@ -6,6 +6,7 @@
 import { Logger } from '../utils/logger.js';
 
 const logger = new Logger('MenuHandler');
+void logger;
 
 const BETRIX_EMOJI = '🌀';
 const BETRIX_HEADER = `${BETRIX_EMOJI} *BETRIX* - Premium Sports Analytics`;
@@ -262,6 +263,7 @@ Check back later for exciting matchups! ⚽`;
  */
 export function buildLiveMenuPayload(games, sport = 'Football', userTier = 'FREE', page = 1, pageSize = 6) {
   const header = BETRIX_HEADER;
+  void userTier;
   if (!games || games.length === 0) {
     return { text: `${header}\n\n*No live ${sport.toLowerCase()} matches right now.*\n\nCheck back later for exciting matchups! ⚽`, reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'menu_main' }]] } };
   }

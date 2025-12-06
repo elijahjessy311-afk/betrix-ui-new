@@ -2,7 +2,7 @@
 const express = require("express");
 const axios = require("axios");
 const router = express.Router();
-const { getProvider, isStub } = require("../lib/ai-config");
+const { getProvider } = require("../lib/ai-config");
 
 router.post("/ai-reply", express.json({ limit: "64kb" }), async (req, res) => {
   try {
@@ -12,7 +12,7 @@ router.post("/ai-reply", express.json({ limit: "64kb" }), async (req, res) => {
 
     console.info("AI-REPLY incoming", { convoId, textPreview: messageText && messageText.slice(0, 120) });
 
-    // persist hooking points can stay here (Upstash or memory) — omitted for brevity
+    // persist hooking points can stay here (Upstash or memory) ï¿½ omitted for brevity
 
     const provider = getProvider();
     if (provider.type === "openrouter") {
@@ -58,7 +58,7 @@ function ruleResponder(text) {
   if (/\b(odds|fixture|match|score|next match)\b/.test(t)) return "Stubbed matches: Team A vs Team B; Team C vs Team D.";
   if (/\b(recommend|tip|prediction)\b/.test(t)) return "Tip (stub): check recent form and head-to-head. Gamble responsibly.";
   if (t.length < 40) return `You said "${text}". Tell me more and I can help with odds, fixtures, or tips.`;
-  return "Thanks for the info — I don't have live AI here, but I can store this and help with fixtures, odds, and subscriptions.";
+  return "Thanks for the info ï¿½ I don't have live AI here, but I can store this and help with fixtures, odds, and subscriptions.";
 }
 
 module.exports = router;

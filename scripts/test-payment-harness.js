@@ -60,8 +60,8 @@ if (fs.existsSync(envPath)) {
       console.error('\nRedis rejected the command: NOAUTH Authentication required.');
       console.error('Double-check the `REDIS_URL` in your environment or `.env` file and ensure it includes the password.');
     }
-    console.error('Test failed:', e);
+    console.error('Test failed:', e && e.message ? e.message : e);
   } finally {
-    try { redis.disconnect(); } catch (ex) {}
+    try { redis.disconnect(); } catch (ex) { /* noop */ }
   }
 })();

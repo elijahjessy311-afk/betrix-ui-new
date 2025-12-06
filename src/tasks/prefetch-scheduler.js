@@ -4,6 +4,7 @@
  * WARNING: setting this below ~10s may stress remote APIs and trigger rate limits.
  */
 import { setTimeout as wait } from 'timers/promises';
+void wait;
 
 export function startPrefetchScheduler({ redis, openLiga, rss, scorebat, footballData, sportsAggregator, intervalSeconds = null } = {}) {
   if (!redis) throw new Error('redis required');
@@ -15,7 +16,7 @@ export function startPrefetchScheduler({ redis, openLiga, rss, scorebat, footbal
   const safeSet = async (key, value, ttl) => {
     try {
       await redis.set(key, JSON.stringify(value), 'EX', ttl).catch(()=>{});
-    } catch (e) { /* noop */ }
+    } catch (e) { void e; }
   };
 
   // Maximum number of items to keep in the prefetch cache for large responses
@@ -36,11 +37,11 @@ export function startPrefetchScheduler({ redis, openLiga, rss, scorebat, footbal
         if (!nxt) return true;
         const n = Number(nxt);
         return nowSec >= n;
-      } catch (e) { return true; }
+      } catch (e) { void e; return true; }
     };
 
     const recordSuccess = async (type) => {
-      try { await redis.del(`prefetch:failures:${type}`); await redis.del(`prefetch:next:${type}`); } catch (e) {}
+      try { await redis.del(`prefetch:failures:${type}`); await redis.del(`prefetch:next:${type}`); } catch (e) { void e; }
     };
 
     const recordFailure = async (type) => {
@@ -51,7 +52,7 @@ export function startPrefetchScheduler({ redis, openLiga, rss, scorebat, footbal
         const next = nowSec + Math.max(1, Math.floor(delay));
         await redis.set(`prefetch:next:${type}`, String(next), 'EX', Math.min(maxBackoff + 60, Math.floor(delay) + 60)).catch(()=>{});
         return { fails, next, delay };
-      } catch (e) { return null; }
+      } catch (e) { void e; return null; }
     };
     try {
       // 1) News feeds - lightweight, good to run frequently
@@ -95,7 +96,7 @@ export function startPrefetchScheduler({ redis, openLiga, rss, scorebat, footbal
             // fetch recent matches for a short list of popular league shortcuts
             const popular = ['bl1','bl2','bl3','1bl','dfl','mls','epl','pd1'];
             for (const l of popular.slice(0,5)) {
-              const recent = await openLiga.getRecentMatches(l, (new Date()).getFullYear(), 2).catch(async (err) => { await recordFailure('openligadb'); return []; });
+              const recent = await openLiga.getRecentMatches(l, (new Date()).getFullYear(), 2).catch(async (_err) => { await recordFailure('openligadb'); return []; });
               await safeSet(`prefetch:openligadb:recent:${l}`, { fetchedAt: ts, recent }, 30);
             }
             await redis.publish('prefetch:updates', JSON.stringify({ type: 'openligadb', ts }));
@@ -111,8 +112,8 @@ export function startPrefetchScheduler({ redis, openLiga, rss, scorebat, footbal
         try {
           // try E0 (EPL) and SP1 (LaLiga) short samples
           const samples = [];
-          try { const epl = await footballData.fixturesFromCsv('E0', '2324').catch(()=>null); if (epl) samples.push({ comp: 'E0', data: epl }); } catch (e) {}
-          try { const la = await footballData.fixturesFromCsv('SP1', '2324').catch(()=>null); if (la) samples.push({ comp: 'SP1', data: la }); } catch (e) {}
+          try { const epl = await footballData.fixturesFromCsv('E0', '2324').catch(()=>null); if (epl) samples.push({ comp: 'E0', data: epl }); } catch (e) { void e; }
+          try { const la = await footballData.fixturesFromCsv('SP1', '2324').catch(()=>null); if (la) samples.push({ comp: 'SP1', data: la }); } catch (e) { void e; }
           for (const s of samples) {
             await safeSet(`prefetch:footballdata:${s.comp}:2324`, { fetchedAt: ts, data: s.data }, 60 * 60);
           }
@@ -137,7 +138,7 @@ export function startPrefetchScheduler({ redis, openLiga, rss, scorebat, footbal
               await safeSet('betrix:prefetch:live:by-sport', bySport, 30);
               await recordSuccess('sportsmonks');
             }
-            const fixtures = await sportsAggregator.getFixtures().catch(async (err) => { await recordFailure('sportsmonks-fixtures'); return []; });
+            const fixtures = await sportsAggregator.getFixtures().catch(async (_err) => { await recordFailure('sportsmonks-fixtures'); return []; });
             if (fixtures && fixtures.length > 0) {
               const cappedFixtures = Array.isArray(fixtures) ? fixtures.slice(0, Math.min(MAX_PREFETCH_STORE, fixtures.length)) : [];
               await safeSet('prefetch:sportsmonks:fixtures', { fetchedAt: ts, count: fixtures.length, data: cappedFixtures }, 60);
