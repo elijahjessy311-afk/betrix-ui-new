@@ -27,25 +27,26 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Lint only changed JS files
+      - name: Lint all JS files
+        env:
+          # Allow temporarily switching back to changed-files mode by setting this secret to 'changed'
+          LINT_MODE: ${{ secrets.CI_LINT_MODE || '' }}
         run: |
-          # Fetch main to compare against for push events
-          git fetch --no-tags --prune origin main || true
-          # Try to detect changed files (supports both push and PR events)
-          CHANGED=$(git diff --name-only origin/main...HEAD || git diff --name-only HEAD^ HEAD || true)
-          echo "Changed files: $CHANGED"
-          if [ -z "$CHANGED" ]; then
-            echo "No changed files detected; skipping lint step."
-            exit 0
+          if [ "${LINT_MODE}" = "changed" ]; then
+            echo "CI configured to lint changed files only (CI_LINT_MODE=changed)"
+            git fetch --no-tags --prune origin main || true
+            CHANGED=$(git diff --name-only origin/main...HEAD || git diff --name-only HEAD^ HEAD || true)
+            FILES=$(echo "$CHANGED" | tr ' ' '\n' | grep -E '^src/.*\.(js|mjs)$' || true)
+            if [ -z "$FILES" ]; then
+              echo "No JS files under src/ changed; skipping lint."
+              exit 0
+            fi
+            echo "Linting changed files:\n$FILES"
+            npx eslint $FILES --max-warnings=0
+          else
+            echo "Linting entire repository JS files (src/, tests/, scripts/)"
+            npx eslint "src/**/*.{js,mjs}" "tests/**/*.{js,mjs}" "scripts/**/*.{js,mjs}" --max-warnings=0
           fi
-          # Select JS files under src/
-          FILES=$(echo "$CHANGED" | tr ' ' '\n' | grep -E '^src/.*\.(js|mjs)$' || true)
-          if [ -z "$FILES" ]; then
-            echo "No JS files under src/ changed; skipping lint."
-            exit 0
-          fi
-          echo "Linting files:\n$FILES"
-          npx eslint $FILES --max-warnings=0
 
       - name: Run tests
         run: npm run test
