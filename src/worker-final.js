@@ -820,15 +820,6 @@ async function handleCommand(chatId, userId, cmd, args, fullText) {
         }
       },
       "/about": () => basicHandlers.about(chatId),
-      "/live": async () => {
-        // route /live to the complete handler (same as above)
-        try {
-          const result = await completeHandler.handleLive(chatId, null, sharedServices);
-          await telegram.sendMessage(chatId, result.text, { reply_markup: result.reply_markup, parse_mode: result.parse_mode || 'Markdown' });
-        } catch (e) {
-          logger.warn('/live handler (duplicate) error', e?.message);
-        }
-      },
       "/news": () => basicHandlers.news(chatId),
       "/highlights": () => basicHandlers.highlights(chatId),
       "/standings": async () => {

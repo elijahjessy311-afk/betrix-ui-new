@@ -78,109 +78,10 @@ export async function handleMessage(update, redis, services) {
   }
 }
 
-export async function handleCallbackQuery(update, redis, services) {
-  try {
-    const cq = update.callback_query;
-    if (!cq || !cq.data) return null;
-    const data = cq.data;
-    const chatId = cq.message && cq.message.chat && cq.message.chat.id;
-
-    if (data.startsWith('match:')) {
-      const parts = data.split(':');
-      const matchId = parts[1];
-      const sport = parts[2] || 'soccer';
-      const agg = services && services.sportsAggregator;
-      if (!agg) return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'Service unavailable.' };
-      try {
-        const match = await agg.getMatchById(matchId, sport);
-        if (!match) return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'Match not found.' };
-        const home = match.home || match.home_team || match.homeName || 'Home';
-        const away = match.away || match.away_team || match.awayName || 'Away';
-        const score = (match.homeScore != null || match.awayScore != null) ? `${match.homeScore || 0}-${match.awayScore || 0}` : '';
-        const text = `*${home}* vs *${away}*\n${score}\nProvider: ${match.provider || 'unknown'}`;
-        return { method: 'editMessageText', chat_id: chatId, message_id: cq.message.message_id, text, parse_mode: 'Markdown' };
-      } catch (e) {
-        return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'Failed to load match details', show_alert: true };
-      }
-    }
-
-    if (data.startsWith('odds:')) {
-      const parts = data.split(':');
-      const matchId = parts[1];
-      const agg = services && services.sportsAggregator;
-      if (!agg) return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'Service unavailable.' };
-      try {
-        const odds = await agg.getOdds(matchId);
-        const text = (odds && odds.length > 0) ? formatOdds(odds) : 'No odds available for this match.';
-        return { method: 'editMessageText', chat_id: chatId, message_id: cq.message.message_id, text, parse_mode: 'Markdown' };
-      } catch (e) {
-        return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'Failed to load odds', show_alert: true };
-      }
-    }
-
-    if (data.startsWith('menu_live_page') || data.startsWith('menu_live_refresh')) {
-      try {
-        const parts = data.split(':');
-        const sport = parts[1] || 'soccer';
-        const page = parseInt(parts[2], 10) || 1;
-        const games = await getLiveMatchesBySport(sport, redis, services && services.sportsAggregator);
-        const payload = buildLiveMenuPayload(games, sport.charAt(0).toUpperCase() + sport.slice(1), 'FREE', page, 6);
-        if (cq && cq.message && typeof cq.message.message_id !== 'undefined') {
-          return [
-            { method: 'editMessageText', chat_id: chatId, message_id: cq.message.message_id, text: payload.text, reply_markup: payload.reply_markup, parse_mode: 'Markdown' },
-            { method: 'answerCallbackQuery', callback_query_id: cq.id, text: '' }
-          ];
-        }
-        return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'Unable to update message.' };
-      } catch (e) {
-        logger.warn('Failed to handle pagination', e?.message || String(e));
-        return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'Unable to load page.' };
-      }
-      }
-
-      if (data.startsWith('menu_live_all')) {
-        try {
-          const parts = data.split(':');
-          const sport = parts[1] || 'soccer';
-          const agg = services && services.sportsAggregator;
-          const games = await getLiveMatchesBySport(sport, redis, agg);
-          if (!games || games.length === 0) {
-            return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'No live matches available.' };
-          }
-
-          // Build a full text listing all matches (no slicing)
-          let text = `${games.length} live ${sport} matches:\n\n`;
-          games.forEach((g, i) => {
-            const idx = i + 1;
-            const home = g.home || g.home_team || g.homeName || 'Home';
-            const away = g.away || g.away_team || g.awayName || 'Away';
-            const score = g.score ? ` | Score: ${g.score}` : '';
-            const kick = g.kickoff || g.starting_at || g.utcDate || '';
-            text += `${idx}. ${home} vs ${away}${score}${kick ? ' | ' + kick : ''}\n`;
-          });
-
-          // Send as a separate message (not editing the inline menu) so users can scroll
-          return [
-            { method: 'sendMessage', chat_id: chatId, text, parse_mode: 'Markdown' },
-            { method: 'answerCallbackQuery', callback_query_id: cq.id, text: '' }
-          ];
-        } catch (e) {
-          logger.warn('Failed to handle show-all', e?.message || String(e));
-          return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'Unable to show all matches.' };
-        }
-    }
-
-    return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'Unknown action' };
-  } catch (e) {
-    logger.warn('handleCallbackQuery failed', e?.message || String(e));
-    return null;
-  }
-}
-
-export default {
-  handleMessage,
-  handleCallbackQuery
-};
+/* Removed duplicated, smaller `handleCallbackQuery` implementation —
+   a consolidated, full-featured `handleCallbackQuery` is defined later
+   in this file. Keeping the later implementation to avoid duplicate
+   declarations that broke linting and imports. */
 
 /**
  * Handle odds request
@@ -2587,11 +2488,48 @@ async function handlePaymentVerification(data, chatId, userId, redis) {
     };
   }
 }
+// (default export moved to bottom after adding command/natural-language helpers)
 
+// Provide lightweight named exports for command and natural-language handling
+// so callers can import either the default object or the named functions.
+export async function handleCommand(update, redis, services) {
+  try {
+    const message = update && (update.message || update.edited_message);
+    if (!message) return null;
+    const text = message.text || '';
+
+    // If it's a slash command, route through handleMessage which already
+    // understands `/live` and other simple commands. This keeps behavior
+    // consistent with the main message handler.
+    if (text && text.startsWith('/')) {
+      return await handleMessage(update, redis, services);
+    }
+
+    return null;
+  } catch (err) {
+    logger.warn('handleCommand error', err?.message || err);
+    return null;
+  }
+}
+
+export async function handleNaturalLanguage(text, chatId, userId, redis, services) {
+  try {
+    // Delegate to the existing AI handler for conversational requests.
+    if (typeof handleGenericAI === 'function') {
+      return await handleGenericAI(text, chatId, userId, redis, services);
+    }
+    return null;
+  } catch (err) {
+    logger.warn('handleNaturalLanguage error', err?.message || err);
+    return null;
+  }
+
+}
 export default {
   handleMessage,
   handleCallbackQuery,
   handleCommand,
   handleNaturalLanguage
 };
+
 
