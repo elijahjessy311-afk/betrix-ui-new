@@ -1,4 +1,5 @@
 # Temporarily ignore large legacy directories to allow focused linting
+archive/
 src/server/
 src/handlers/
 src/services/
