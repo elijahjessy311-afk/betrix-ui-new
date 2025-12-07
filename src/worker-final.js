@@ -64,6 +64,12 @@ import perfUtils from "./utils/performance-optimizer.js";
 const logger = new Logger("FinalWorker");
 void logger;
 
+// Ensure express is available for the minimal webhook server
+import express from 'express';
+
+// Global flag used to decide whether to start the minimal webhook server.
+// Default: enabled unless explicitly set to 'false'.
+const ENABLE_MINIMAL_WEB = (process.env.START_MINIMAL_WEB_ON_WORKER || 'true').toString().toLowerCase() !== 'false';
 try {
   validateConfig();
   logger.info("✅ Configuration validated (SPORTSMONKS or FOOTBALLDATA keys accepted)");
@@ -459,8 +465,7 @@ let running = true; // flag used to gracefully stop the main loop on SIGTERM/SIG
 // This makes the deployment robust if a platform accidentally runs the worker as the
 // web process: the worker will still accept webhooks and enqueue them for processing.
 try {
-  const enableMinimalWeb = (process.env.START_MINIMAL_WEB_ON_WORKER || 'true').toString().toLowerCase() !== 'false';
-  if (enableMinimalWeb) {
+  if (ENABLE_MINIMAL_WEB) {
     const httpPort = process.env.PORT || 5000;
     const minimalApp = express();
     minimalApp.use(express.json({ limit: '1mb' }));
@@ -1027,7 +1032,7 @@ process.on("uncaughtException", (err) => {
 // This ensures admin endpoints (e.g. /admin/routes, /admin/redis-ping, /webhook/*)
 // are available even if Render or another platform invokes the worker entrypoint
 // as the service start command. Set START_HTTP_IN_WORKER=false to disable.
-if (process.env.START_HTTP_IN_WORKER !== 'false') {
+if (process.env.START_HTTP_IN_WORKER !== 'false' && !ENABLE_MINIMAL_WEB) {
   try {
     const { default: app } = await import('./app.js');
     try {
@@ -1041,7 +1046,7 @@ if (process.env.START_HTTP_IN_WORKER !== 'false') {
     logger.warn('Could not import app to start HTTP server inside worker', e?.message || String(e));
   }
 } else {
-  logger.info('START_HTTP_IN_WORKER set to false — not starting HTTP admin server in worker');
+  logger.info('Not starting full HTTP admin server in worker (START_HTTP_IN_WORKER=false or minimal webhook enabled)');
 }
 
 main().catch(err => {
