@@ -503,9 +503,13 @@ export async function handleCallbackQuery(cq, redis, services) {
         text += `\n`;
       });
 
-      // Add a 'Show All' button to allow users to receive all fixtures (paginated)
+      // Add a 'Show All' button and a 'Show Postponed' quick toggle
       keyboard.push([
         { text: `📋 Show All (${fixtures.length})`, callback_data: 'fixtures_all' },
+        { text: '🟡 Show Postponed', callback_data: 'fixtures_all_postponed' }
+      ]);
+      // Back button on a separate row
+      keyboard.push([
         { text: '🔙 Back', callback_data: 'menu_main' }
       ]);
 
@@ -730,6 +734,53 @@ Include only valid JSON in the response if possible. After the JSON, you may inc
       } catch (e) {
         logger.warn('fixtures_all handler failed', e?.message || e);
         return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'Failed to send all fixtures', show_alert: false };
+      }
+    }
+
+    // Show all fixtures including postponed ones (paginated)
+    if (data === 'fixtures_all_postponed') {
+      try {
+        const fixtures = (services && services.sportsAggregator) ? await services.sportsAggregator.getFixtures() : [];
+        if (!fixtures || fixtures.length === 0) {
+          return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'No fixtures available', show_alert: false };
+        }
+
+        // Do not filter by time here; include archived/postponed fixtures
+        const useFixtures = fixtures;
+
+        const actions = [];
+        const pageSize = 25;
+        for (let i = 0; i < useFixtures.length; i += pageSize) {
+          const page = useFixtures.slice(i, i + pageSize);
+          let text = `📋 *All Fixtures (including postponed)* (page ${Math.floor(i / pageSize) + 1}/${Math.ceil(fixtures.length / pageSize)})\n\n`;
+          for (const f of page) {
+            const home = safeName(f.home || f.homeTeam || f.homeName || (f.raw && f.raw.homeTeam), 'Home');
+            const away = safeName(f.away || f.awayTeam || f.awayName || (f.raw && f.raw.awayTeam), 'Away');
+            let kickoff = 'TBA';
+            try {
+              const d = f.kickoff || f.utcDate || f.date || f.time || f.starting_at;
+              if (d) kickoff = (typeof d === 'number') ? new Date(d < 1e12 ? d * 1000 : d).toLocaleString() : new Date(d).toLocaleString();
+            } catch (e) { /* ignore */ }
+
+            // Mark postponed fixtures clearly
+            const isPostponed = (f.state_id === 5) || (f.status && String(f.status).toUpperCase().includes('POSTPONED'));
+            const postfix = isPostponed ? ' (POSTPONED)' : '';
+            text += `• ${home} vs ${away} — ${kickoff}${postfix}\n`;
+          }
+
+          actions.push({
+            method: 'sendMessage',
+            chat_id: chatId,
+            text,
+            reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'menu_fixtures' }]] },
+            parse_mode: 'Markdown'
+          });
+        }
+
+        return actions;
+      } catch (e) {
+        logger.warn('fixtures_all_postponed handler failed', e?.message || e);
+        return { method: 'answerCallbackQuery', callback_query_id: cq.id, text: 'Failed to send postponed fixtures', show_alert: false };
       }
     }
 
