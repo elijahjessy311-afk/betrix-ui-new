@@ -670,7 +670,15 @@ export async function handleCallbackQuery(cq, redis, services) {
           } catch (e) { kickoff = 'TBA'; }
 
           text += `• ${home} vs ${away} — ${kickoff}\n`;
+          // Primary label row (opens fixture details)
           keyboard.push([{ text: `${home} vs ${away}`, callback_data: `fixture:${f.id}` }]);
+          // Action row: Analyze (targets upcoming fixtures), Odds, Favourite
+          const analyzeCb = `analyze_match_${'upcoming'}_${f.id}`;
+          keyboard.push([
+            { text: '🤖 Analyze', callback_data: analyzeCb },
+            { text: '💰 Odds', callback_data: `odds_compare_${f.id}` },
+            { text: '⭐ Fav', callback_data: `fav_add_${f.id}` }
+          ]);
         });
         text += `\n`;
       });
