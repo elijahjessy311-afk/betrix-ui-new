@@ -699,12 +699,11 @@ try {
               console.log('[rapidapisamples] readerror - worker-final.js:699', e && e.message ? e.message : String(e));
             }
           }
-        }
 
-        // Minimal safe debug: indicate prefetch scheduler and rapidapi logging are active
-        try {
-          console.log('[debug] prefetch scheduler active; rapidapi proxy calls will be logged as [rapidapi] entries (keys masked) - worker-final.js:706');
-        } catch (e) {}
+          // Minimal safe debug: indicate prefetch scheduler and rapidapi logging are active
+          try {
+            console.log('[debug] prefetch scheduler active; rapidapi proxy calls will be logged as [rapidapi] entries (keys masked) - worker-final.js:706');
+          } catch (e) {}
         } else {
           console.log('[rapidapisamples] no persport rapidapi keys found (scheduler may not have run yet) - worker-final.js:709');
         }
